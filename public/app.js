@@ -487,7 +487,7 @@ function renderLedger() {
 
     const originalRow = (originalName && originalName !== displayName)
       ? `<div class="original-name-row" title="Original Download Filename">📁 Original: ${escapeHtml(originalName)}</div>`
-      : `<div class="original-name-row" title="Downloaded Filename">📁 Original: ${escapeHtml(originalName)}</div>`;
+      : '';
 
     const galleryBtn = (file.thumbnails && file.thumbnails.length > 0)
       ? `<button class="btn-table-action info" onclick="openGalleryModal('${file.id}')" title="View 15-Frame Screenshot Gallery (${file.thumbnails.length} frames)">🖼️ Gallery</button>`
