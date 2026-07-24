@@ -137,11 +137,8 @@ function connectSSE() {
           }
         }
       }
-
-      if (data.files) {
-        ledgerFiles = data.files;
-        renderGalleryPage();
-      }
+      // Intentionally DO NOT call renderGalleryPage() from SSE on gallery page
+      // to keep DOM 100% static and prevent background re-render jitter!
     } catch (e) {
       console.error('Error parsing SSE event:', e);
     }
