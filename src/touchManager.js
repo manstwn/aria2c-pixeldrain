@@ -37,7 +37,7 @@ async function touchFileRecord(file) {
   const filename = file.filename || file.original_filename || 'file';
   const targetUrl = `https://pixeldrain.com/api/file/${file.pixeldrain_id}/${encodeURIComponent(filename)}`;
 
-  console.log(`[TouchManager] Pinging & 12% chunk-downloading (${Math.round(targetBytes / 1024)} KB) for ${filename} | RAW URL: ${targetUrl}`);
+  console.log(`[TouchManager] Pinging & 12% chunk-downloading (${Math.round(targetBytes / 1024)} KB) for ${filename} | Target: ${targetUrl}...`);
 
   try {
     const response = await axios.get(targetUrl, {
@@ -51,6 +51,10 @@ async function touchFileRecord(file) {
       validateStatus: s => s < 500
     });
 
+    const finalEndpointUrl = (response.request && response.request.res && response.request.res.responseUrl)
+      || (response.request && response.request.responseUrl)
+      || targetUrl;
+
     if (response.data && typeof response.data.destroy === 'function') {
       response.data.destroy();
     }
@@ -63,16 +67,16 @@ async function touchFileRecord(file) {
         last_touched: new Date().toISOString(),
         status: 'LIVE'
       });
-      console.log(`[TouchManager] ✅ Touch successful (12% downloaded) for ${filename} | RAW URL: ${targetUrl}`);
+      console.log(`[TouchManager] ✅ Touch successful (12% downloaded) for ${filename} | Real Endpoint: ${finalEndpointUrl}`);
       return { success: true, status: 'LIVE', file: updated };
 
     } else if (isNotFound) {
       const updated = db.updateFile(file.id, { status: 'DEAD' });
-      console.warn(`[TouchManager] ❌ Touch FAILED (404) for ${filename} | RAW URL: ${targetUrl}. Marked DEAD.`);
+      console.warn(`[TouchManager] ❌ Touch FAILED (404) for ${filename} | Real Endpoint: ${finalEndpointUrl}. Marked DEAD.`);
       return { success: false, status: 'DEAD', file: updated };
 
     } else {
-      console.warn(`[TouchManager] Received HTTP ${response.status} for ${filename} | RAW URL: ${targetUrl}. Leaving status untouched.`);
+      console.warn(`[TouchManager] Received HTTP ${response.status} for ${filename} | Real Endpoint: ${finalEndpointUrl}. Leaving status untouched.`);
       return { success: false, status: file.status, file };
     }
 
