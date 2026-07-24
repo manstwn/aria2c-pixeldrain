@@ -638,9 +638,8 @@ function renderLedger() {
 
       const thumbUrl = (file.thumbnails && file.thumbnails.length > 0) ? file.thumbnails[0] : null;
       const previewCellHTML = thumbUrl
-        ? `<div class="table-thumb-box" onclick="openGalleryModal('${file.id}')" title="Click to view 15-frame gallery (${file.thumbnails.length} frames)">
+        ? `<div class="table-thumb-box" onclick="openGalleryModal('${file.id}')" title="Click to view screenshot gallery">
              <img src="${escapeHtml(thumbUrl)}" alt="Thumbnail Preview" />
-             <span class="thumb-count-tag">${file.thumbnails.length}f</span>
            </div>`
         : `<div class="table-thumb-box fallback" title="No thumbnail available">
              <span>${catIcon}</span>
