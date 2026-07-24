@@ -1551,22 +1551,17 @@ input:focus {
   position: relative;
   width: 100%;
   aspect-ratio: 16/9;
-  background: rgba(30, 41, 59, 0.8);
+  background-color: rgba(30, 41, 59, 0.8);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   overflow: hidden;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   contain: layout paint;
-}
-
-.gallery-card-cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  pointer-events: none;
-  user-select: none;
+  transition: border-color 0.2s ease;
 }
 
 .gallery-cover-badge {

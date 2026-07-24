@@ -254,16 +254,17 @@ function renderGalleryPage() {
       ? `<span class="gallery-cover-badge">⏱️ ${escapeHtml(durationText)}</span>`
       : (cat === 'video' ? `<span class="gallery-cover-badge">🎬 Video</span>` : '');
 
-    // Cover HTML with smooth automatic slideshow on cursor hover
+    // Cover HTML with background-image swapping for 100% zero-jitter slideshow
     let coverHTML = '';
     if (thumbUrl) {
       coverHTML = `
         <div class="gallery-card-cover"
+             id="coverDiv_${file.id}"
+             style="background-image: url('${escapeHtml(thumbUrl)}');"
              onmouseenter="startHoverSlideshow(this, '${file.id}')"
              onmouseleave="stopHoverSlideshow(this, '${file.id}')"
              onclick="openGalleryModal('${file.id}')"
              title="Hover to auto-preview frames • Click to open lightbox">
-          <img id="coverImg_${file.id}" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(displayName)}" />
           ${topBadgeHTML}
         </div>
       `;
@@ -322,39 +323,24 @@ function renderGalleryPage() {
   }).join('');
 }
 
-// Automatic Smooth Frame Slideshow on Hover with Image Preloading & Zero Jitter
+// Automatic Smooth Frame Slideshow on Hover with CSS Background Swapping & Zero Jitter
 const hoverSlideshowIntervals = {};
-const preloadedCache = {};
-
-function preloadThumbnails(file) {
-  if (!file || !file.thumbnails || file.thumbnails.length === 0) return;
-  if (preloadedCache[file.id]) return;
-
-  preloadedCache[file.id] = true;
-  file.thumbnails.forEach(url => {
-    const img = new Image();
-    img.src = url;
-  });
-}
 
 function startHoverSlideshow(element, fileId) {
   const file = ledgerFiles.find(f => f.id === fileId);
   if (!file || !file.thumbnails || file.thumbnails.length <= 1) return;
 
-  // Preload all thumbnails into browser RAM cache
-  preloadThumbnails(file);
-
   stopHoverSlideshow(element, fileId);
 
   let frameIdx = 0;
-  const imgEl = document.getElementById(`coverImg_${fileId}`);
-  if (!imgEl) return;
+  const coverDiv = document.getElementById(`coverDiv_${fileId}`);
+  if (!coverDiv) return;
 
   hoverSlideshowIntervals[fileId] = setInterval(() => {
     frameIdx = (frameIdx + 1) % file.thumbnails.length;
-    const currentImg = document.getElementById(`coverImg_${fileId}`);
-    if (currentImg && file.thumbnails[frameIdx]) {
-      currentImg.src = file.thumbnails[frameIdx];
+    const targetDiv = document.getElementById(`coverDiv_${fileId}`);
+    if (targetDiv && file.thumbnails[frameIdx]) {
+      targetDiv.style.backgroundImage = `url("${file.thumbnails[frameIdx]}")`;
     }
   }, 380);
 }
@@ -366,9 +352,9 @@ function stopHoverSlideshow(element, fileId) {
   }
 
   const file = ledgerFiles.find(f => f.id === fileId);
-  const imgEl = document.getElementById(`coverImg_${fileId}`);
-  if (imgEl && file && file.thumbnails && file.thumbnails.length > 0) {
-    imgEl.src = file.thumbnails[0];
+  const coverDiv = document.getElementById(`coverDiv_${fileId}`);
+  if (coverDiv && file && file.thumbnails && file.thumbnails.length > 0) {
+    coverDiv.style.backgroundImage = `url("${file.thumbnails[0]}")`;
   }
 }
 
