@@ -334,23 +334,22 @@ function renderGalleryPage() {
     `;
   }).join('');
 
-  // Preload all 15-frame thumbnail images into browser memory
-  preloadAllThumbnails();
+  // Do NOT preload all thumbnails upfront — load lazily on hover/modal open
 }
 
 // Automatic Smooth Frame Slideshow on Hover with Dual-Layer Fade Crossfade & Frame Dots
 const hoverSlideshowIntervals = {};
 const preloadedCache = {};
 
-function preloadAllThumbnails() {
-  ledgerFiles.forEach(file => {
-    if (file.thumbnails && Array.isArray(file.thumbnails) && !preloadedCache[file.id]) {
-      preloadedCache[file.id] = true;
-      file.thumbnails.forEach(url => {
-        const img = new Image();
-        img.src = url;
-      });
-    }
+// Lazily preload only the thumbnails for a single specific card (called on hover)
+function preloadCardThumbnails(fileId) {
+  if (preloadedCache[fileId]) return; // already done
+  const file = ledgerFiles.find(f => f.id === fileId);
+  if (!file || !file.thumbnails) return;
+  preloadedCache[fileId] = true;
+  file.thumbnails.forEach(url => {
+    const img = new Image();
+    img.src = url;
   });
 }
 
@@ -358,6 +357,9 @@ function startHoverSlideshow(evt, fileId) {
   activeHoverFileId = fileId;
   const file = ledgerFiles.find(f => f.id === fileId);
   if (!file || !file.thumbnails || file.thumbnails.length <= 1) return;
+
+  // Lazy-load this card's frames only now on first hover
+  preloadCardThumbnails(fileId);
 
   stopHoverSlideshow(evt, fileId);
 
@@ -451,6 +453,9 @@ function openGalleryModal(fileId) {
 
   activeGalleryFileId = fileId;
   activeGalleryImages = file.thumbnails;
+
+  // Lazy-load only this card's frames (skipped if already cached from a prior hover)
+  preloadCardThumbnails(fileId);
 
   // Default to selected_thumbnail if present
   const selectedIdx = file.thumbnails.indexOf(file.selected_thumbnail);
