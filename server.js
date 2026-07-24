@@ -58,7 +58,14 @@ app.post('/api/logout', (req, res) => {
   res.json({ success: true, message: 'Logged out' });
 });
 
+let _cachedFolderSize = 0;
+let _folderSizeLastCalc = 0;
+
 function getFolderSize(dirPath) {
+  const now = Date.now();
+  // Recalculate at most once every 10 seconds
+  if (now - _folderSizeLastCalc < 10000) return _cachedFolderSize;
+
   let totalBytes = 0;
   if (!fs.existsSync(dirPath)) return 0;
 
@@ -75,6 +82,8 @@ function getFolderSize(dirPath) {
     }
   } catch (e) {}
 
+  _cachedFolderSize = totalBytes;
+  _folderSizeLastCalc = now;
   return totalBytes;
 }
 
@@ -116,7 +125,7 @@ app.get('/api/stream', (req, res) => {
   };
 
   sendUpdate();
-  const interval = setInterval(sendUpdate, 1000);
+  const interval = setInterval(sendUpdate, 3000);
 
   req.on('close', () => {
     clearInterval(interval);

@@ -56,6 +56,10 @@ function connectSSE() {
 
   eventSource = new EventSource('/api/stream');
 
+  // Hash cache to skip re-renders when data hasn't changed
+  let _lastDownloadsHash = '';
+  let _lastFilesHash = '';
+
   eventSource.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
@@ -82,13 +86,21 @@ function connectSSE() {
       }
 
       if (data.downloads) {
-        renderActiveDownloads(data.downloads);
+        const dHash = JSON.stringify(data.downloads);
+        if (dHash !== _lastDownloadsHash) {
+          _lastDownloadsHash = dHash;
+          renderActiveDownloads(data.downloads);
+        }
       }
 
       if (data.files) {
-        ledgerFiles = data.files;
-        renderLedger();
-        renderGallery();
+        const fHash = JSON.stringify(data.files);
+        if (fHash !== _lastFilesHash) {
+          _lastFilesHash = fHash;
+          ledgerFiles = data.files;
+          renderLedger();
+          renderGallery();
+        }
       }
     } catch (e) {
       console.error('Error parsing SSE event:', e);
