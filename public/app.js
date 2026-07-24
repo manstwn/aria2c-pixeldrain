@@ -264,7 +264,7 @@ function renderActiveDownloads(downloads) {
   if (!listEl || !emptyState) return;
 
   const activeDownloadingTasks = downloads.filter(t => t.status === 'active' || t.status === 'UPLOADING' || t.status === 'UPLOAD_FAILED' || t.status === 'error');
-  const queueTasks = downloads.filter(t => t.status === 'waiting' || t.status === 'paused');
+  const queueTasks = downloads.filter(t => t.status === 'waiting' || t.status === 'paused' || t.status === 'QUEUED' || t.status === 'DOWNLOADING');
 
   // Render Queue Column
   renderQueueTasks(queueTasks);
@@ -367,15 +367,23 @@ function renderQueueTasks(queueTasks) {
 
   queueEmpty.classList.add('hidden');
 
-  queueContainer.innerHTML = queueTasks.map(task => {
+  queueContainer.innerHTML = queueTasks.map((task, idx) => {
     const isPaused = task.status === 'paused';
-    const statusBadge = isPaused
-      ? `<span class="status-badge dead">PAUSED</span>`
-      : `<span class="status-badge live" style="background: rgba(0, 122, 255, 0.15); color: var(--color-electric-blue); border-color: rgba(0, 122, 255, 0.3);"><span class="dot-pulse" style="background: var(--color-electric-blue);"></span> QUEUED</span>`;
+    const isQueued = task.status === 'QUEUED' || task.status === 'waiting';
+    const isDownloading = task.status === 'DOWNLOADING';
+
+    let statusBadge;
+    if (isPaused) {
+      statusBadge = `<span class="status-badge dead">PAUSED</span>`;
+    } else if (isDownloading) {
+      statusBadge = `<span class="status-badge live" style="background: rgba(245,158,11,0.15); color: #f59e0b; border-color: rgba(245,158,11,0.3);"><span class="dot-pulse" style="background: #f59e0b;"></span> STARTING...</span>`;
+    } else {
+      statusBadge = `<span class="status-badge live" style="background: rgba(0, 122, 255, 0.15); color: var(--color-electric-blue); border-color: rgba(0, 122, 255, 0.3);"><span class="dot-pulse" style="background: var(--color-electric-blue);"></span> QUEUED #${idx + 1}</span>`;
+    }
 
     const pauseResumeBtn = isPaused
       ? `<button class="btn-copy-mini" onclick="unpauseQueueTask('${task.gid}')" title="Resume task">▶️</button>`
-      : `<button class="btn-copy-mini" onclick="pauseQueueTask('${task.gid}')" title="Pause task">⏸️</button>`;
+      : (isQueued ? `` : `<button class="btn-copy-mini" onclick="pauseQueueTask('${task.gid}')" title="Pause task">⏸️</button>`);
 
     return `
       <div class="queue-item-card">
