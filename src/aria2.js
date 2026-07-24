@@ -320,11 +320,13 @@ async function pollCompletedDownloads() {
             setTimeout(() => {
               activeUploads.delete(task.gid);
               try { rpcCall('aria2.removeDownloadResult', [task.gid]); } catch (e) {}
+              processNextQueueItem();
             }, 2000);
           })
           .catch(err => {
             console.error(`[Aria2] Pixeldrain upload failed for task ${task.gid}:`, err.message);
             activeUploads.set(task.gid, { filename, status: 'UPLOAD_FAILED', error: err.message });
+            processNextQueueItem();
           });
       } else if (task.status === 'error' && !processedGids.has(task.gid)) {
         processedGids.add(task.gid);
@@ -333,10 +335,70 @@ async function pollCompletedDownloads() {
         try {
           await rpcCall('aria2.removeDownloadResult', [task.gid]);
         } catch (e) {}
+        processNextQueueItem();
       }
     }
+
+    // Process next queued task if pipeline is free
+    processNextQueueItem();
   } catch (err) {
     // Suppress polling errors when RPC is down
+  }
+}
+
+let isProcessingQueue = false;
+
+/**
+ * Strict Serial Queue Processor:
+ * Ensures only 1 task downloads AND uploads completely before starting the next task!
+ */
+async function processNextQueueItem() {
+  if (isProcessingQueue) return;
+
+  try {
+    isProcessingQueue = true;
+
+    // 1. Check active downloads in Aria2 RPC
+    let activeTasks = [];
+    try {
+      activeTasks = await rpcCall('aria2.tellActive') || [];
+    } catch (e) {}
+
+    const hasActiveDownload = activeTasks.length > 0;
+
+    // 2. Check active uploads in memory map
+    let hasActiveUpload = false;
+    for (const [gid, upload] of activeUploads.entries()) {
+      if (upload && upload.status === 'UPLOADING') {
+        hasActiveUpload = true;
+        break;
+      }
+    }
+
+    // Strict Pipeline Lock: If downloading OR uploading, DO NOT start next task!
+    if (hasActiveDownload || hasActiveUpload) {
+      return;
+    }
+
+    // 3. Find next QUEUED item in data/queue.json
+    const queue = db.getAllQueue();
+    const nextItem = queue.find(q => q.status === 'QUEUED');
+    if (!nextItem) return;
+
+    console.log(`[Queue Engine] Pipeline clear. Launching next queued download: "${nextItem.filename}" (${nextItem.url})`);
+
+    // Mark status as DOWNLOADING in queue.json
+    db.updateQueueItem(nextItem.id, { status: 'DOWNLOADING' });
+
+    // Submit to Aria2 RPC
+    const gid = await addDownload(nextItem.url, nextItem.custom_name);
+    if (gid) {
+      db.updateQueueItem(nextItem.id, { gid, status: 'DOWNLOADING' });
+    }
+  } catch (err) {
+    console.error('[Queue Engine] Error launching next queue item:', err.message);
+  } finally {
+    isProcessingQueue = false;
   }
 }
 
@@ -443,5 +505,6 @@ module.exports = {
   unpauseAll,
   pauseTask,
   unpauseTask,
+  processNextQueueItem,
   startMonitor
 };

@@ -148,12 +148,11 @@ app.post('/api/downloads', auth.requireAuth, async (req, res) => {
     const chosenName = filename || customFilename || '';
     const queueRecord = db.addToQueue({ url, custom_name: chosenName, status: 'QUEUED' });
 
-    const gid = await aria2.addDownload(url, chosenName);
-    if (gid) {
-      db.updateQueueItem(queueRecord.id, { gid });
-    }
+    // Trigger Strict Serial Queue Engine: will launch immediately if pipeline is free,
+    // or keep QUEUED if another task is currently downloading or uploading!
+    aria2.processNextQueueItem();
 
-    res.json({ success: true, gid, queueId: queueRecord.id, message: 'Download task submitted successfully with 16 connections enforced.' });
+    res.json({ success: true, queueId: queueRecord.id, message: 'Download task added to queue.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
