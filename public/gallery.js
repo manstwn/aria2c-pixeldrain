@@ -322,12 +322,27 @@ function renderGalleryPage() {
   }).join('');
 }
 
-// Automatic Smooth Frame Slideshow on Hover
+// Automatic Smooth Frame Slideshow on Hover with Image Preloading & Zero Jitter
 const hoverSlideshowIntervals = {};
+const preloadedCache = {};
+
+function preloadThumbnails(file) {
+  if (!file || !file.thumbnails || file.thumbnails.length === 0) return;
+  if (preloadedCache[file.id]) return;
+
+  preloadedCache[file.id] = true;
+  file.thumbnails.forEach(url => {
+    const img = new Image();
+    img.src = url;
+  });
+}
 
 function startHoverSlideshow(element, fileId) {
   const file = ledgerFiles.find(f => f.id === fileId);
   if (!file || !file.thumbnails || file.thumbnails.length <= 1) return;
+
+  // Preload all thumbnails into browser RAM cache
+  preloadThumbnails(file);
 
   stopHoverSlideshow(element, fileId);
 
@@ -337,8 +352,11 @@ function startHoverSlideshow(element, fileId) {
 
   hoverSlideshowIntervals[fileId] = setInterval(() => {
     frameIdx = (frameIdx + 1) % file.thumbnails.length;
-    imgEl.src = file.thumbnails[frameIdx];
-  }, 400);
+    const currentImg = document.getElementById(`coverImg_${fileId}`);
+    if (currentImg && file.thumbnails[frameIdx]) {
+      currentImg.src = file.thumbnails[frameIdx];
+    }
+  }, 380);
 }
 
 function stopHoverSlideshow(element, fileId) {

@@ -1557,6 +1557,7 @@ input:focus {
   display: flex;
   align-items: center;
   justify-content: center;
+  contain: layout paint;
 }
 
 .gallery-card-cover img {
@@ -1564,6 +1565,8 @@ input:focus {
   height: 100%;
   object-fit: cover;
   display: block;
+  pointer-events: none;
+  user-select: none;
 }
 
 .gallery-cover-badge {
@@ -1581,6 +1584,8 @@ input:focus {
   display: flex;
   align-items: center;
   gap: 4px;
+  pointer-events: none;
+  user-select: none;
 }
 
 .gallery-cover-fallback {
