@@ -265,12 +265,14 @@ function renderGalleryPage() {
              onmouseleave="stopHoverSlideshow(this, '${file.id}')"
              onclick="openGalleryModal('${file.id}')"
              title="Hover to auto-preview frames • Click to open lightbox">
+          <span class="cover-small-dot"></span>
           ${topBadgeHTML}
         </div>
       `;
     } else {
       coverHTML = `
         <div class="gallery-card-cover" onclick="showFileMetadata('${file.id}')" title="View File Metadata">
+          <span class="cover-small-dot"></span>
           <span class="gallery-cover-fallback">${catIcon}</span>
           ${topBadgeHTML}
         </div>

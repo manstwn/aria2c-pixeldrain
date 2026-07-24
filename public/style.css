@@ -1564,6 +1564,19 @@ input:focus {
   transition: border-color 0.2s ease;
 }
 
+.cover-small-dot {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-emerald-live);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.85);
+  pointer-events: none;
+  z-index: 2;
+}
+
 .gallery-cover-badge {
   position: absolute;
   top: 8px;
