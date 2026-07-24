@@ -203,6 +203,11 @@ app.delete('/api/files/:id', auth.requireAuth, (req, res) => {
   }
 });
 
+// Dedicated Gallery Page Route
+app.get('/gallery', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'gallery.html'));
+});
+
 // Serve SPA fallback for HTML requests
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

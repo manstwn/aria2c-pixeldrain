@@ -68,7 +68,7 @@ function connectSSE() {
         if (badge && dot) {
           if (data.conn.online) {
             dot.className = 'status-dot online';
-            badgeText.textContent = `Aria2 RPC v${data.conn.version}`;
+            badgeText.textContent = 'Aria2 RPC';
           } else {
             dot.className = 'status-dot offline';
             badgeText.textContent = 'Aria2 Offline';
@@ -83,6 +83,7 @@ function connectSSE() {
       if (data.files) {
         ledgerFiles = data.files;
         renderLedger();
+        renderGallery();
       }
     } catch (e) {
       console.error('Error parsing SSE event:', e);
@@ -228,7 +229,7 @@ async function fetchDownloads() {
 
     if (data.aria2Connection && data.aria2Connection.online) {
       dot.className = 'status-dot online';
-      badgeText.textContent = `Aria2 RPC v${data.aria2Connection.version}`;
+      badgeText.textContent = 'Aria2 RPC';
     } else {
       dot.className = 'status-dot offline';
       badgeText.textContent = 'Aria2 Offline';
@@ -255,6 +256,17 @@ function renderActiveDownloads(downloads) {
   if (!listEl || !emptyState) return;
 
   const activeTasks = downloads.filter(t => t.status !== 'UPLOADED');
+
+  // Update Overview Metric Counters
+  const activeCountEl = document.getElementById('metricActiveTasksCount');
+  if (activeCountEl) activeCountEl.textContent = activeTasks.length;
+
+  let totalSpeedBytes = 0;
+  activeTasks.forEach(task => {
+    totalSpeedBytes += (task.downloadSpeed || 0) + (task.uploadSpeed || 0);
+  });
+  const speedEl = document.getElementById('metricSpeedText');
+  if (speedEl) speedEl.textContent = `${formatBytes(totalSpeedBytes)}/s`;
 
   if (!activeTasks || activeTasks.length === 0) {
     listEl.innerHTML = '';
@@ -360,15 +372,36 @@ async function fetchFiles() {
     const data = await res.json();
     ledgerFiles = data.files || [];
     renderLedger();
+    renderGallery();
   } catch (err) {
     console.error('Error fetching file ledger:', err);
   }
 }
 
+let currentPage = 1;
+let pageSize = 25;
+
 function setFilter(filter, el) {
   activeFilter = filter;
   document.querySelectorAll('.filter-pill').forEach(pill => pill.classList.remove('active'));
   el.classList.add('active');
+  currentPage = 1;
+  renderLedger();
+}
+
+function changePageSize(val) {
+  pageSize = parseInt(val, 10) || 25;
+  currentPage = 1;
+  renderLedger();
+}
+
+function changePage(delta) {
+  currentPage += delta;
+  renderLedger();
+}
+
+function resetPageAndRender() {
+  currentPage = 1;
   renderLedger();
 }
 
@@ -418,6 +451,7 @@ function formatRelativeTime(dateString) {
 function renderLedger() {
   const search = (document.getElementById('searchInput').value || '').toLowerCase().trim();
   const tbody = document.getElementById('ledgerTableBody');
+  const mobileCardsEl = document.getElementById('ledgerMobileCards');
   const emptyState = document.getElementById('ledgerEmptyState');
 
   // Update counts
@@ -425,10 +459,20 @@ function renderLedger() {
   const liveCount = ledgerFiles.filter(f => f.status === 'LIVE').length;
   const deadCount = ledgerFiles.filter(f => f.status === 'DEAD').length;
 
-  document.getElementById('statLiveCount').textContent = liveCount;
-  document.getElementById('countAll').textContent = totalCount;
-  document.getElementById('countLive').textContent = liveCount;
-  document.getElementById('countDead').textContent = deadCount;
+  const statLiveEl = document.getElementById('statLiveCount');
+  if (statLiveEl) statLiveEl.textContent = liveCount;
+
+  const countAllEl = document.getElementById('countAll');
+  if (countAllEl) countAllEl.textContent = totalCount;
+
+  const countLiveEl = document.getElementById('countLive');
+  if (countLiveEl) countLiveEl.textContent = liveCount;
+
+  const countDeadEl = document.getElementById('countDead');
+  if (countDeadEl) countDeadEl.textContent = deadCount;
+
+  const totalFilesEl = document.getElementById('metricTotalFilesCount');
+  if (totalFilesEl) totalFilesEl.textContent = totalCount;
 
   // Filter items
   const filtered = ledgerFiles.filter(file => {
@@ -440,100 +484,226 @@ function renderLedger() {
     return matchesFilter && matchesSearch;
   });
 
-  if (filtered.length === 0) {
-    tbody.innerHTML = '';
+  const totalItems = filtered.length;
+  const totalPages = Math.ceil(totalItems / pageSize) || 1;
+
+  if (currentPage < 1) currentPage = 1;
+  if (currentPage > totalPages) currentPage = totalPages;
+
+  const startIndex = (currentPage - 1) * pageSize;
+  const pageItems = filtered.slice(startIndex, startIndex + pageSize);
+
+  // Update Pagination Controls UI
+  const pageInfoStr = `Page ${currentPage} of ${totalPages}`;
+  const showingStr = totalItems === 0 ? 'Showing 0 entries' : `Showing ${startIndex + 1} to ${Math.min(startIndex + pageSize, totalItems)} of ${totalItems} entries`;
+
+  const pageInfoTopEl = document.getElementById('pageInfoTop');
+  if (pageInfoTopEl) pageInfoTopEl.textContent = pageInfoStr;
+
+  const pageInfoBottomEl = document.getElementById('pageInfoBottom');
+  if (pageInfoBottomEl) pageInfoBottomEl.textContent = pageInfoStr;
+
+  const showingEntriesEl = document.getElementById('showingEntriesText');
+  if (showingEntriesEl) showingEntriesEl.textContent = showingStr;
+
+  const btnPrevTop = document.getElementById('btnPrevPageTop');
+  if (btnPrevTop) btnPrevTop.disabled = currentPage <= 1;
+
+  const btnPrevBottom = document.getElementById('btnPrevPageBottom');
+  if (btnPrevBottom) btnPrevBottom.disabled = currentPage <= 1;
+
+  const btnNextTop = document.getElementById('btnNextPageTop');
+  if (btnNextTop) btnNextTop.disabled = currentPage >= totalPages;
+
+  const btnNextBottom = document.getElementById('btnNextPageBottom');
+  if (btnNextBottom) btnNextBottom.disabled = currentPage >= totalPages;
+
+  if (pageItems.length === 0) {
+    if (tbody) tbody.innerHTML = '';
+    if (mobileCardsEl) mobileCardsEl.innerHTML = '';
     emptyState.classList.remove('hidden');
     return;
   }
 
   emptyState.classList.add('hidden');
 
-  tbody.innerHTML = filtered.map(file => {
-    const isLive = file.status === 'LIVE';
-    const statusBadge = isLive
-      ? `<span class="badge-status live"><span class="status-dot online"></span> LIVE</span>`
-      : `<span class="badge-status dead"><span class="status-dot offline"></span> DEAD</span>`;
+  // 1. Render Desktop Table Rows
+  if (tbody) {
+    tbody.innerHTML = pageItems.map(file => {
+      const isLive = file.status === 'LIVE';
+      const statusBadge = isLive
+        ? `<span class="status-badge live"><span class="dot-pulse"></span> LIVE</span>`
+        : `<span class="status-badge dead">DEAD</span>`;
 
-    const lastTouchedRel = formatRelativeTime(file.last_touched);
-    const createdAtRel = formatRelativeTime(file.created_at);
-    const lastTouchedUTC = formatUTC(file.last_touched);
-    const createdAtUTC = formatUTC(file.created_at);
+      const lastTouchedRel = formatRelativeTime(file.last_touched);
+      const createdAtRel = formatRelativeTime(file.created_at);
+      const lastTouchedUTC = formatUTC(file.last_touched);
+      const createdAtUTC = formatUTC(file.created_at);
 
-    const meta = file.metadata || {};
-    const cat = meta.category || 'file';
-    const catIcon = cat === 'video' ? '🎬' : cat === 'image' ? '🖼️' : cat === 'audio' ? '🎵' : cat === 'archive' ? '📦' : '📄';
+      const meta = file.metadata || {};
+      const cat = meta.category || 'file';
+      const catIcon = cat === 'video' ? '🎬' : cat === 'image' ? '🖼️' : cat === 'audio' ? '🎵' : cat === 'archive' ? '📦' : '📄';
 
-    let metaPills = [];
-    if (meta.size_formatted && meta.size_formatted !== 'N/A') {
-      metaPills.push(`<span class="meta-pill size">💾 ${escapeHtml(meta.size_formatted)}</span>`);
-    } else if (meta.size_bytes > 0) {
-      metaPills.push(`<span class="meta-pill size">💾 ${formatBytes(meta.size_bytes)}</span>`);
-    }
+      const displayName = file.custom_name || file.filename;
+      const originalName = file.original_filename || file.filename;
 
-    if (meta.resolution) {
-      metaPills.push(`<span class="meta-pill res">📐 ${escapeHtml(meta.resolution)}</span>`);
-    }
+      const originalRow = (originalName && originalName !== displayName)
+        ? `<div class="original-name-row" title="Original Download Filename">📁 Original: ${escapeHtml(originalName)}</div>`
+        : '';
 
-    if (meta.duration_formatted) {
-      metaPills.push(`<span class="meta-pill duration">⏱️ ${escapeHtml(meta.duration_formatted)}</span>`);
-    }
+      const thumbUrl = (file.thumbnails && file.thumbnails.length > 0) ? file.thumbnails[0] : null;
+      const previewCellHTML = thumbUrl
+        ? `<div class="table-thumb-box" onclick="openGalleryModal('${file.id}')" title="Click to view 15-frame gallery (${file.thumbnails.length} frames)">
+             <img src="${escapeHtml(thumbUrl)}" alt="Thumbnail Preview" />
+             <span class="thumb-count-tag">${file.thumbnails.length}f</span>
+           </div>`
+        : `<div class="table-thumb-box fallback" title="No thumbnail available">
+             <span>${catIcon}</span>
+           </div>`;
 
-    if (file.source_url) {
-      metaPills.push(`<a href="${escapeHtml(file.source_url)}" target="_blank" rel="noopener" class="meta-pill source" title="${escapeHtml(file.source_url)}">🌐 Source Link</a>`);
-    }
+      const galleryBtn = (file.thumbnails && file.thumbnails.length > 0)
+        ? `<button class="btn-table-action" onclick="openGalleryModal('${file.id}')" title="View 15-Frame Screenshot Gallery (${file.thumbnails.length} frames)">🖼️ Gallery</button>`
+        : '';
 
-    const displayName = file.custom_name || file.filename;
-    const originalName = file.original_filename || file.filename;
-
-    const originalRow = (originalName && originalName !== displayName)
-      ? `<div class="original-name-row" title="Original Download Filename">📁 Original: ${escapeHtml(originalName)}</div>`
-      : '';
-
-    const galleryBtn = (file.thumbnails && file.thumbnails.length > 0)
-      ? `<button class="btn-table-action info" onclick="openGalleryModal('${file.id}')" title="View 15-Frame Screenshot Gallery (${file.thumbnails.length} frames)">🖼️ Gallery</button>`
-      : '';
-
-    return `
-      <tr>
-        <td class="filename-cell">
-          <div class="file-title-row">
-            <span class="cat-icon">${catIcon}</span>
-            <span
-              class="file-name-text editable-name"
-              contenteditable="true"
-              spellcheck="false"
-              title="Click to edit display name"
-              data-file-id="${file.id}"
-              data-original-value="${escapeHtml(displayName)}"
-              onblur="saveCustomName(this)"
-              onkeydown="handleNameKeydown(event, this)"
-            >${escapeHtml(displayName)}</span>
-          </div>
-          ${originalRow}
-        </td>
-        <td class="link-cell">
-          ${file.download_url ? `
-            <div class="gofile-link-badge">
-              <a href="${escapeHtml(file.download_url)}" target="_blank" rel="noopener">${escapeHtml(file.download_url)}</a>
-              <button class="btn-copy-mini" onclick="copyToClipboard('${escapeHtml(file.download_url)}')" title="Copy Pixeldrain Link">📋</button>
+      return `
+        <tr>
+          <td>${previewCellHTML}</td>
+          <td class="filename-cell">
+            <div class="file-title-row">
+              <span class="cat-icon">${catIcon}</span>
+              <span
+                class="file-name-text editable-name"
+                contenteditable="true"
+                spellcheck="false"
+                title="Click to edit display name"
+                data-file-id="${file.id}"
+                data-original-value="${escapeHtml(displayName)}"
+                onblur="saveCustomName(this)"
+                onkeydown="handleNameKeydown(event, this)"
+              >${escapeHtml(displayName)}</span>
             </div>
-          ` : '<span class="text-muted">N/A</span>'}
-        </td>
-        <td>${statusBadge}</td>
-        <td><small class="utc-date-text" title="UTC: ${escapeHtml(lastTouchedUTC)}">${escapeHtml(lastTouchedRel)}</small></td>
-        <td><small class="utc-date-text" title="UTC: ${escapeHtml(createdAtUTC)}">${escapeHtml(createdAtRel)}</small></td>
-        <td class="text-right">
-          <div class="action-buttons">
-            ${galleryBtn}
-            <button class="btn-table-action primary" onclick="showFileMetadata('${file.id}')" title="View Full File Metadata">🔍 Meta</button>
-            <button class="btn-table-action" onclick="copyToClipboard('${escapeHtml(file.download_url)}')" title="Copy Pixeldrain Link">📋 Copy</button>
-            <button class="btn-table-action success" onclick="triggerSingleTouch('${file.id}')" title="Ping Pixeldrain link now">⚡ Touch</button>
-            <button class="btn-table-action danger" onclick="deleteRecord('${file.id}')" title="Delete ledger entry">🗑️</button>
+            ${originalRow}
+          </td>
+          <td class="link-cell">
+            ${file.download_url ? `
+              <div class="gofile-link-badge">
+                <a href="${escapeHtml(file.download_url)}" target="_blank" rel="noopener">${escapeHtml(file.download_url)}</a>
+                <button class="btn-copy-mini" onclick="copyToClipboard('${escapeHtml(file.download_url)}')" title="Copy Pixeldrain Link">📋</button>
+              </div>
+            ` : '<span class="text-muted">N/A</span>'}
+          </td>
+          <td>${statusBadge}</td>
+          <td><small class="utc-date-text" title="UTC: ${escapeHtml(lastTouchedUTC)}">${escapeHtml(lastTouchedRel)}</small></td>
+          <td class="text-right">
+            <div class="action-buttons-stack">
+              <div class="action-row">
+                <button class="btn-table-action primary" onclick="showFileMetadata('${file.id}')" title="View Full File Metadata">🔍 Meta</button>
+                <button class="btn-table-action" onclick="copyToClipboard('${escapeHtml(file.download_url)}')" title="Copy Link">📋 Copy</button>
+              </div>
+              <div class="action-row">
+                <button class="btn-table-action success" onclick="triggerSingleTouch('${file.id}')" title="Ping Pixeldrain Link">⚡ Touch</button>
+                ${galleryBtn ? galleryBtn : `<button class="btn-table-action" disabled style="opacity: 0.3; cursor: not-allowed;">🖼️ N/A</button>`}
+              </div>
+              <button class="btn-table-action danger" onclick="deleteRecord('${file.id}')" title="Delete Ledger Entry" style="width: 100%;">🗑️ Delete</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // 2. Render Mobile Cards View (Vertical Phone Mode)
+  if (mobileCardsEl) {
+    mobileCardsEl.innerHTML = pageItems.map(file => {
+      const isLive = file.status === 'LIVE';
+      const statusBadge = isLive
+        ? `<span class="status-badge live"><span class="dot-pulse"></span> LIVE</span>`
+        : `<span class="status-badge dead">DEAD</span>`;
+
+      const lastTouchedRel = formatRelativeTime(file.last_touched);
+      const createdAtRel = formatRelativeTime(file.created_at);
+      const lastTouchedUTC = formatUTC(file.last_touched);
+      const createdAtUTC = formatUTC(file.created_at);
+
+      const meta = file.metadata || {};
+      const cat = meta.category || 'file';
+      const catIcon = cat === 'video' ? '🎬' : cat === 'image' ? '🖼️' : cat === 'audio' ? '🎵' : cat === 'archive' ? '📦' : '📄';
+
+      let metaPills = [];
+      if (meta.size_formatted && meta.size_formatted !== 'N/A') {
+        metaPills.push(`<span class="meta-pill">💾 ${escapeHtml(meta.size_formatted)}</span>`);
+      } else if (meta.size_bytes > 0) {
+        metaPills.push(`<span class="meta-pill">💾 ${formatBytes(meta.size_bytes)}</span>`);
+      }
+      if (meta.resolution) {
+        metaPills.push(`<span class="meta-pill">📐 ${escapeHtml(meta.resolution)}</span>`);
+      }
+      if (meta.duration_formatted) {
+        metaPills.push(`<span class="meta-pill">⏱️ ${escapeHtml(meta.duration_formatted)}</span>`);
+      }
+      if (file.source_url) {
+        metaPills.push(`<a href="${escapeHtml(file.source_url)}" target="_blank" rel="noopener" class="meta-pill source" title="${escapeHtml(file.source_url)}">🌐 Source</a>`);
+      }
+
+      const displayName = file.custom_name || file.filename;
+      const originalName = file.original_filename || file.filename;
+
+      const originalRow = (originalName && originalName !== displayName)
+        ? `<div class="section-desc">📁 Original: ${escapeHtml(originalName)}</div>`
+        : '';
+
+      const galleryBtn = (file.thumbnails && file.thumbnails.length > 0)
+        ? `<button class="btn-table-action" onclick="openGalleryModal('${file.id}')">🖼️ Gallery</button>`
+        : '';
+
+      return `
+        <div class="ledger-mobile-card">
+          <div class="card-top-row">
+            <div class="card-title-container">
+              <div style="font-weight: 700; font-size: 0.95rem; display: flex; align-items: flex-start; gap: 6px; min-width: 0;">
+                <span style="flex-shrink: 0; line-height: 1.4;">${catIcon}</span>
+                <span
+                  class="editable-name"
+                  contenteditable="true"
+                  spellcheck="false"
+                  data-file-id="${file.id}"
+                  data-original-value="${escapeHtml(displayName)}"
+                  onblur="saveCustomName(this)"
+                  onkeydown="handleNameKeydown(event, this)"
+                >${escapeHtml(displayName)}</span>
+              </div>
+              ${originalRow}
+            </div>
+            ${statusBadge}
           </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
+
+          ${file.download_url ? `
+            <div class="gofile-link-badge" style="max-width: 100%;">
+              <a href="${escapeHtml(file.download_url)}" target="_blank" rel="noopener">${escapeHtml(file.download_url)}</a>
+              <button class="btn-copy-mini" onclick="copyToClipboard('${escapeHtml(file.download_url)}')" title="Copy Link">📋</button>
+            </div>
+          ` : ''}
+
+          <div class="card-meta-pills">
+            ${metaPills.join('')}
+          </div>
+
+          <div class="card-dates-row">
+            <span title="UTC: ${escapeHtml(lastTouchedUTC)}">Touched: ${escapeHtml(lastTouchedRel)}</span>
+            <span title="UTC: ${escapeHtml(createdAtUTC)}">Created: ${escapeHtml(createdAtRel)}</span>
+          </div>
+
+          <div class="card-actions-row">
+            ${galleryBtn}
+            <button class="btn-table-action primary" onclick="showFileMetadata('${file.id}')">🔍 Meta</button>
+            <button class="btn-table-action" onclick="copyToClipboard('${escapeHtml(file.download_url)}')">📋 Copy</button>
+            <button class="btn-table-action success" onclick="triggerSingleTouch('${file.id}')">⚡ Touch</button>
+            <button class="btn-table-action danger" onclick="deleteRecord('${file.id}')">🗑️</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
 }
 
 /* ==========================================================================
@@ -589,13 +759,13 @@ function showFileMetadata(id) {
     </div>
 
     <div class="meta-item span-2">
-      <span class="meta-label">GoFile Download Link</span>
-      <div class="meta-value mono"><a href="${escapeHtml(file.download_url)}" target="_blank" rel="noopener" style="color:#3b82f6;">${escapeHtml(file.download_url)}</a></div>
+      <span class="meta-label">Pixeldrain Download Link</span>
+      <div class="meta-value mono"><a href="${escapeHtml(file.download_url)}" target="_blank" rel="noopener" style="color:#007AFF;">${escapeHtml(file.download_url)}</a></div>
     </div>
 
     <div class="meta-item">
-      <span class="meta-label">GoFile Status</span>
-      <div class="meta-value">${file.status === 'LIVE' ? '<span style="color:#34d399;">🟢 LIVE</span>' : '<span style="color:#f87171;">🔴 DEAD</span>'}</div>
+      <span class="meta-label">Pixeldrain Retention Status</span>
+      <div class="meta-value">${file.status === 'LIVE' ? '<span style="color:#10B981;">🟢 LIVE</span>' : '<span style="color:#F43F5E;">🔴 DEAD</span>'}</div>
     </div>
 
     ${file.source_url ? `
@@ -606,8 +776,8 @@ function showFileMetadata(id) {
     ` : ''}
 
     <div class="meta-item">
-      <span class="meta-label">GoFile Admin Code</span>
-      <div class="meta-value mono">${escapeHtml(file.admin_code || 'N/A')}</div>
+      <span class="meta-label">Pixeldrain File ID</span>
+      <div class="meta-value mono">${escapeHtml(file.pixeldrain_id || file.gofile_id || 'N/A')}</div>
     </div>
 
     <div class="meta-item">
@@ -871,3 +1041,113 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeGalleryModal();
   }
 });
+
+/* ==========================================================================
+   MEDIA GALLERY VIEW RENDERING LOGIC
+   ========================================================================== */
+
+let galleryCategoryFilter = 'ALL';
+
+function setGalleryCategory(cat, el) {
+  galleryCategoryFilter = cat;
+  if (el) {
+    const parent = el.closest('.status-filter-pills');
+    if (parent) {
+      parent.querySelectorAll('.filter-pill').forEach(pill => pill.classList.remove('active'));
+      el.classList.add('active');
+    }
+  }
+  renderGallery();
+}
+
+function renderGallery() {
+  const container = document.getElementById('galleryGridContainer');
+  const emptyState = document.getElementById('galleryEmptyState');
+  const searchInput = document.getElementById('gallerySearchInput');
+
+  if (!container) return;
+
+  const search = (searchInput ? searchInput.value : '').toLowerCase().trim();
+
+  const filtered = ledgerFiles.filter(file => {
+    const meta = file.metadata || {};
+    const cat = meta.category || 'file';
+
+    const matchesCat = galleryCategoryFilter === 'ALL' || cat === galleryCategoryFilter;
+    const matchesSearch = !search ||
+      file.filename.toLowerCase().includes(search) ||
+      (file.custom_name && file.custom_name.toLowerCase().includes(search));
+
+    return matchesCat && matchesSearch;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = '';
+    if (emptyState) emptyState.classList.remove('hidden');
+    return;
+  }
+
+  if (emptyState) emptyState.classList.add('hidden');
+
+  container.innerHTML = filtered.map(file => {
+    const meta = file.metadata || {};
+    const cat = meta.category || 'file';
+    const catIcon = cat === 'video' ? '🎬' : cat === 'image' ? '🖼️' : cat === 'audio' ? '🎵' : cat === 'archive' ? '📦' : '📄';
+    const displayName = file.custom_name || file.filename;
+    const thumbUrl = (file.thumbnails && file.thumbnails.length > 0) ? file.thumbnails[0] : null;
+
+    let metaPills = [];
+    if (meta.size_formatted && meta.size_formatted !== 'N/A') {
+      metaPills.push(`<span class="meta-pill">💾 ${escapeHtml(meta.size_formatted)}</span>`);
+    } else if (meta.size_bytes > 0) {
+      metaPills.push(`<span class="meta-pill">💾 ${formatBytes(meta.size_bytes)}</span>`);
+    }
+    if (meta.resolution) {
+      metaPills.push(`<span class="meta-pill">📐 ${escapeHtml(meta.resolution)}</span>`);
+    }
+    if (meta.duration_formatted) {
+      metaPills.push(`<span class="meta-pill">⏱️ ${escapeHtml(meta.duration_formatted)}</span>`);
+    }
+
+    const coverHTML = thumbUrl
+      ? `<div class="gallery-card-cover" onclick="openGalleryModal('${file.id}')" title="Click to open 15-frame lightbox">
+           <img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(displayName)}" />
+           <span class="gallery-cover-badge">📷 ${file.thumbnails.length} Frames</span>
+         </div>`
+      : `<div class="gallery-card-cover" onclick="showFileMetadata('${file.id}')" title="View File Metadata">
+           <span class="gallery-cover-fallback">${catIcon}</span>
+         </div>`;
+
+    const galleryBtn = (file.thumbnails && file.thumbnails.length > 0)
+      ? `<button class="btn-table-action primary" style="flex:1;" onclick="openGalleryModal('${file.id}')">🖼️ 15-Frame Lightbox</button>`
+      : '';
+
+    return `
+      <div class="gallery-item-card">
+        ${coverHTML}
+        <div class="gallery-card-body">
+          <div class="gallery-card-title">
+            <span>${catIcon}</span>
+            <span>${escapeHtml(displayName)}</span>
+          </div>
+
+          <div class="card-meta-pills">
+            ${metaPills.join('')}
+          </div>
+
+          ${file.download_url ? `
+            <div class="gofile-link-badge" style="max-width: 100%;">
+              <a href="${escapeHtml(file.download_url)}" target="_blank" rel="noopener">${escapeHtml(file.download_url)}</a>
+              <button class="btn-copy-mini" onclick="copyToClipboard('${escapeHtml(file.download_url)}')" title="Copy Link">📋</button>
+            </div>
+          ` : ''}
+
+          <div class="gallery-card-actions">
+            ${galleryBtn}
+            <button class="btn-table-action" style="flex:1;" onclick="showFileMetadata('${file.id}')">🔍 Meta</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}

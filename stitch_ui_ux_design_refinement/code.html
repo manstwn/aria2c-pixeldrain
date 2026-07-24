@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PixelTouch Manager | Mission Control</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        :root {
+            --glass-stroke: rgba(255, 255, 255, 0.08);
+        }
+        body {
+            background-color: #0b1326;
+            color: #dbe2fd;
+            overflow-x: hidden;
+        }
+        .glass-panel {
+            background: rgba(23, 31, 51, 0.4);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-stroke);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+        .glass-card {
+            background: rgba(45, 52, 73, 0.3);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-stroke);
+        }
+        .glow-blue {
+            box-shadow: 0 0 15px rgba(0, 122, 255, 0.3);
+        }
+        .pulse-emerald {
+            animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .sse-pulse {
+            animation: sse-flicker 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 0; }
+        }
+        @keyframes sse-flicker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(173, 198, 255, 0.1);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(173, 198, 255, 0.3);
+        }
+        @media (max-width: 768px) {
+            .mobile-bottom-nav {
+                box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+            }
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-surface": "#dbe2fd",
+                        "surface-container-lowest": "#060d20",
+                        "inverse-primary": "#005bc1",
+                        "secondary": "#4edea3",
+                        "surface-container-high": "#222a3e",
+                        "inverse-on-surface": "#283044",
+                        "primary": "#adc6ff",
+                        "on-surface": "#dbe2fd",
+                        "on-primary-container": "#00285c",
+                        "text-primary": "#dae2fd",
+                        "on-secondary-fixed-variant": "#005236",
+                        "on-error-container": "#ffdad6",
+                        "on-background": "#dbe2fd",
+                        "surface-dim": "#0b1326",
+                        "electric-blue": "#007AFF",
+                        "error": "#ffb4ab",
+                        "tertiary-container": "#ff516a",
+                        "amber-warn": "#F59E0B",
+                        "tertiary-fixed": "#ffdadb",
+                        "primary-container": "#4b8eff",
+                        "surface-accent": "#1E293B",
+                        "surface-container": "#171f33",
+                        "on-tertiary-fixed": "#40000d",
+                        "on-primary-fixed-variant": "#004493",
+                        "glass-stroke": "rgba(255, 255, 255, 0.08)",
+                        "on-tertiary": "#67001b",
+                        "surface-container-highest": "#2d3449",
+                        "text-secondary": "#c1c6d7",
+                        "surface-container-low": "#131b2e",
+                        "outline-variant": "#414755",
+                        "on-tertiary-container": "#5b0017",
+                        "surface": "#0b1326",
+                        "text-muted": "#8b90a0",
+                        "on-surface-variant": "#c1c6d7",
+                        "primary-fixed-dim": "#adc6ff",
+                        "primary-fixed": "#d8e2ff",
+                        "secondary-container": "#00a572",
+                        "error-container": "#93000a",
+                        "tertiary": "#ffb2b7",
+                        "surface-bright": "#31394e",
+                        "on-tertiary-fixed-variant": "#92002a",
+                        "outline": "#8b90a0",
+                        "surface-tint": "#adc6ff",
+                        "secondary-fixed-dim": "#4edea3",
+                        "tertiary-fixed-dim": "#ffb2b7",
+                        "on-secondary-fixed": "#002113",
+                        "surface-variant": "#2d3449",
+                        "emerald-live": "#10B981",
+                        "on-primary": "#002e69",
+                        "on-primary-fixed": "#001a41",
+                        "on-error": "#690005",
+                        "rose-error": "#F43F5E",
+                        "on-secondary": "#003824",
+                        "secondary-fixed": "#6ffbbe",
+                        "on-secondary-container": "#00311f",
+                        "background": "#0b1326"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "xxl": "48px",
+                        "base": "4px",
+                        "lg": "24px",
+                        "xs": "4px",
+                        "container-max": "1240px",
+                        "gutter": "16px",
+                        "xl": "32px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "label-caps": ["Inter"],
+                        "data-lg": ["JetBrains Mono"],
+                        "body-sm": ["Inter"],
+                        "data-sm": ["JetBrains Mono"],
+                        "headline-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "data-md": ["JetBrains Mono"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-caps": ["11px", {"lineHeight": "1", "letterSpacing": "0.1em", "fontWeight": "700"}],
+                        "data-lg": ["16px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                        "body-sm": ["13px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "data-sm": ["12px", {"lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "headline-sm": ["18px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "data-md": ["14px", {"lineHeight": "1.2", "fontWeight": "500"}],
+                        "body-lg": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="font-body-md text-text-primary antialiased">
+<!-- Desktop Sidebar / Mobile Bottom Nav -->
+<aside class="fixed z-50 transition-all duration-300 md:h-screen md:w-64 md:left-0 md:top-0 md:border-r md:flex-col md:py-lg md:px-md md:bg-surface-dim/80 h-16 w-full bottom-0 left-0 border-t flex flex-row py-0 px-0 bg-surface-container/95 backdrop-blur-xl border-glass-stroke shadow-2xl mobile-bottom-nav">
+<div class="hidden md:block mb-xl px-sm">
+<h1 class="font-headline-md text-headline-md font-bold text-primary tracking-tight">PixelTouch</h1>
+<p class="font-data-sm text-data-sm text-text-muted mt-1">V3.1.2 Status: Active</p>
+</div>
+<button class="hidden md:flex mb-lg w-full bg-electric-blue text-white py-3 px-md rounded-lg font-headline-sm text-headline-sm items-center justify-center gap-2 hover:scale-[0.98] transition-transform glow-blue">
+<span class="material-symbols-outlined">add_circle</span>
+        New Download
+    </button>
+<nav class="flex-1 flex md:flex-col items-center md:items-stretch justify-around md:justify-start md:space-y-1 w-full">
+<a class="flex flex-col md:flex-row items-center gap-1 md:gap-3 py-2 md:py-sm px-4 md:px-md rounded-lg text-primary font-bold md:border-r-2 md:border-primary md:bg-primary/10 transition-all duration-300" href="#">
+<span class="material-symbols-outlined text-2xl md:text-xl">dashboard</span>
+<span class="font-data-sm md:font-body-md text-[10px] md:text-body-md">Command</span>
+</a>
+<a class="flex flex-col md:flex-row items-center gap-1 md:gap-3 py-2 md:py-sm px-4 md:px-md rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-accent/50 transition-all duration-300" href="#">
+<span class="material-symbols-outlined text-2xl md:text-xl">downloading</span>
+<span class="font-data-sm md:font-body-md text-[10px] md:text-body-md">Active</span>
+</a>
+<a class="flex flex-col md:flex-row items-center gap-1 md:gap-3 py-2 md:py-sm px-4 md:px-md rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-accent/50 transition-all duration-300" href="#">
+<span class="material-symbols-outlined text-2xl md:text-xl">inventory_2</span>
+<span class="font-data-sm md:font-body-md text-[10px] md:text-body-md">Ledger</span>
+</a>
+<a class="flex flex-col md:flex-row items-center gap-1 md:gap-3 py-2 md:py-sm px-4 md:px-md rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-accent/50 transition-all duration-300" href="#">
+<span class="material-symbols-outlined text-2xl md:text-xl">speed</span>
+<span class="font-data-sm md:font-body-md text-[10px] md:text-body-md">Network</span>
+</a>
+<a class="hidden md:flex items-center gap-3 py-sm px-md rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-accent/50 transition-all duration-300" href="#">
+<span class="material-symbols-outlined">terminal</span>
+<span class="font-body-md text-body-md">System Logs</span>
+</a>
+</nav>
+<div class="hidden md:block mt-auto space-y-1 pt-lg border-t border-glass-stroke">
+<a class="flex items-center gap-3 py-sm px-md rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-accent/50 transition-all" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</a>
+<div class="flex items-center justify-between p-md bg-surface-container-low rounded-xl mt-md">
+<div class="flex items-center gap-3">
+<img alt="User Profile" class="w-10 h-10 rounded-full border-2 border-primary/20 object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD8LMtW9q4ExlW-omXkgCsrnFlV6fDXPredJJ3rd8Vif7Gy5hT9HvfTJaln-MZ_N7LTIcDvUVB92GpTIyzDgQmRax4Jds-9isAbM21thfUrEZBu6GvSaMaKs8kbY9u5rLgowzQ7lK5yiNgFgVH1Y2Zw6ILuG2Lojvrh5poYpc0luEjOz8Rq0ufy28Dpi3a9TDArbq5gVKer_3UqNWLifI-lKC7y0VjVSaBEGcU320d-nd3NyRzAzSzyYXLqHIDVZiIezecMEzZPnQ4R"/>
+<div>
+<p class="font-body-md text-body-md font-semibold text-text-primary">Admin_01</p>
+<p class="text-[10px] text-emerald-live font-data-sm uppercase tracking-wider flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-live pulse-emerald"></span>
+                        Online
+                    </p>
+</div>
+</div>
+<button class="material-symbols-outlined text-text-muted hover:text-error transition-colors">power_settings_new</button>
+</div>
+</div>
+</aside>
+<!-- Top Navigation Bar -->
+<header class="fixed top-0 right-0 w-full md:w-[calc(100%-16rem)] h-16 bg-surface-container/40 backdrop-blur-md border-b border-glass-stroke flex items-center justify-between px-md md:px-lg z-40">
+<div class="flex items-center gap-4 md:gap-8">
+<span class="font-headline-sm text-headline-sm font-black text-primary md:hidden">PT</span>
+<span class="font-headline-sm text-headline-sm font-black text-primary hidden md:inline">PixelTouch Manager</span>
+<div class="hidden lg:flex items-center gap-6">
+<span class="font-data-sm text-data-sm text-emerald-live font-medium flex items-center gap-1.5 sse-pulse">
+<span class="material-symbols-outlined text-base">hub</span>
+                Cluster-01: Streaming
+            </span>
+<span class="font-data-sm text-data-sm text-text-secondary flex items-center gap-1.5">
+<span class="material-symbols-outlined text-base">download</span>
+                Aria2: Active
+            </span>
+</div>
+</div>
+<div class="flex items-center gap-2 md:gap-4">
+<div class="relative group hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-lg group-focus-within:text-primary">search</span>
+<input class="bg-surface-container-highest/50 border border-glass-stroke rounded-full py-1.5 pl-10 pr-4 text-body-sm w-32 md:w-64 focus:ring-1 focus:ring-primary focus:outline-none transition-all" placeholder="Search..." type="text"/>
+</div>
+<div class="flex items-center gap-1 md:gap-2">
+<button class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-lg hover:bg-white/5 transition-all text-text-secondary">
+<span class="material-symbols-outlined text-xl">notifications</span>
+</button>
+<button class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-lg hover:bg-white/5 transition-all text-text-secondary">
+<span class="material-symbols-outlined text-xl">dns</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="w-full md:ml-64 pt-24 px-md md:px-lg pb-32 md:pb-xl space-y-lg max-w-[1600px] overflow-x-hidden">
+<!-- System Overview Grid -->
+<section class="grid grid-cols-2 lg:grid-cols-4 gap-sm md:gap-md">
+<div class="glass-card p-sm md:p-md rounded-xl flex items-center gap-3 md:gap-4">
+<div class="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-electric-blue/10 flex items-center justify-center text-electric-blue">
+<span class="material-symbols-outlined text-xl md:text-2xl">speed</span>
+</div>
+<div>
+<p class="text-text-muted font-label-caps text-[9px] md:text-label-caps uppercase">Speed</p>
+<p class="font-data-lg text-sm md:text-data-lg text-text-primary">142.8 <span class="hidden md:inline text-xs text-text-muted">MB/s</span></p>
+</div>
+</div>
+<div class="glass-card p-sm md:p-md rounded-xl flex items-center gap-3 md:gap-4">
+<div class="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-emerald-live/10 flex items-center justify-center text-emerald-live">
+<span class="material-symbols-outlined text-xl md:text-2xl" style="font-variation-settings: 'FILL' 1;">task_alt</span>
+</div>
+<div>
+<p class="text-text-muted font-label-caps text-[9px] md:text-label-caps uppercase">Tasks</p>
+<p class="font-data-lg text-sm md:text-data-lg text-text-primary">12 <span class="hidden md:inline text-xs text-text-muted">Active</span></p>
+</div>
+</div>
+<div class="glass-card p-sm md:p-md rounded-xl flex items-center gap-3 md:gap-4">
+<div class="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-xl md:text-2xl">folder_managed</span>
+</div>
+<div>
+<p class="text-text-muted font-label-caps text-[9px] md:text-label-caps uppercase">Files</p>
+<p class="font-data-lg text-sm md:text-data-lg text-text-primary">1,402</p>
+</div>
+</div>
+<div class="glass-card p-sm md:p-md rounded-xl flex items-center gap-3 md:gap-4">
+<div class="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-amber-warn/10 flex items-center justify-center text-amber-warn">
+<span class="material-symbols-outlined text-xl md:text-2xl">memory</span>
+</div>
+<div>
+<p class="text-text-muted font-label-caps text-[9px] md:text-label-caps uppercase">Uptime</p>
+<p class="font-data-lg text-sm md:text-data-lg text-text-primary">98.2%</p>
+</div>
+</div>
+</section>
+<!-- Task Submission Section -->
+<section class="glass-panel p-md md:p-lg rounded-2xl">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between mb-md gap-4">
+<div class="flex items-center gap-3">
+<h2 class="font-headline-sm text-headline-sm text-text-primary">Mission Control</h2>
+<span class="bg-primary/20 text-primary px-2 py-0.5 rounded font-data-sm text-xs border border-primary/30 flex items-center gap-1.5">
+<span class="material-symbols-outlined text-xs">shield</span>
+                    16 Connect Enforcement
+                </span>
+</div>
+<div class="flex items-center gap-4 justify-between sm:justify-end">
+<label class="flex items-center gap-2 cursor-pointer group">
+<span class="text-body-sm text-text-muted group-hover:text-text-primary transition-colors">SSE Stream</span>
+<div class="relative inline-flex items-center h-5 w-10 bg-emerald-live/20 rounded-full border border-emerald-live/30 transition-colors">
+<span class="translate-x-6 inline-block w-3 h-3 transform bg-emerald-live rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
+</div>
+</label>
+<button class="material-symbols-outlined text-text-muted hover:text-primary transition-colors p-2">settings</button>
+</div>
+</div>
+<div class="flex flex-col md:flex-row gap-md">
+<div class="flex-1 relative">
+<input class="w-full bg-surface-container-lowest/50 border border-glass-stroke rounded-xl py-3.5 px-4 font-data-md text-data-md text-primary placeholder:text-text-muted/40 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all touch-manipulation" placeholder="Enter source URL (https://...)" type="text"/>
+</div>
+<button class="bg-primary text-on-primary-container px-xl py-3.5 rounded-xl font-headline-sm text-headline-sm font-bold flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all touch-manipulation">
+<span class="material-symbols-outlined">rocket_launch</span>
+                Execute
+            </button>
+</div>
+</section>
+<!-- Active Downloads -->
+<section class="space-y-md">
+<div class="flex items-center justify-between px-sm">
+<h3 class="font-headline-sm text-headline-sm text-text-secondary">Active Pipelines</h3>
+<button class="text-body-sm text-primary hover:underline">View All</button>
+</div>
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-md">
+<!-- Task Card 1 -->
+<div class="glass-card p-md rounded-xl space-y-md group">
+<div class="flex justify-between items-start gap-4">
+<div class="flex items-center gap-3 overflow-hidden">
+<div class="w-10 h-10 shrink-0 rounded bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">movie</span>
+</div>
+<div class="min-w-0">
+<h4 class="font-body-md text-body-md font-bold text-text-primary truncate">Neon_Genesis_End_of_Evangelion_1080p.mkv</h4>
+<p class="text-xs font-data-sm text-text-muted truncate">https://cdn-edge-04.pixeldrain.com/v1/u/8f2a...</p>
+</div>
+</div>
+<div class="flex gap-1 md:opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+<button class="p-2 rounded-lg hover:bg-surface-accent text-text-muted hover:text-amber-warn transition-colors"><span class="material-symbols-outlined text-xl">pause</span></button>
+<button class="p-2 rounded-lg hover:bg-surface-accent text-text-muted hover:text-error transition-colors"><span class="material-symbols-outlined text-xl">stop</span></button>
+</div>
+</div>
+<div class="space-y-sm">
+<div class="flex justify-between font-data-sm text-xs md:text-data-sm">
+<span class="text-text-muted">74% Completed</span>
+<span class="text-emerald-live font-medium">42.5 MB/s</span>
+</div>
+<div class="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full glow-blue" style="width: 74%"></div>
+</div>
+<div class="flex justify-between text-[11px] font-data-sm text-text-muted uppercase tracking-wider">
+<span>ETA: 04:22s</span>
+<span>1.4 GB / 1.89 GB</span>
+</div>
+</div>
+</div>
+<!-- Task Card 2 -->
+<div class="glass-card p-md rounded-xl space-y-md group">
+<div class="flex justify-between items-start gap-4">
+<div class="flex items-center gap-3 overflow-hidden">
+<div class="w-10 h-10 shrink-0 rounded bg-surface-accent flex items-center justify-center text-text-secondary">
+<span class="material-symbols-outlined">archive</span>
+</div>
+<div class="min-w-0">
+<h4 class="font-body-md text-body-md font-bold text-text-primary truncate">System_Update_Package_v4.tar.gz</h4>
+<p class="text-xs font-data-sm text-text-muted truncate">https://nas-01.local/mirror/updates/pixel...</p>
+</div>
+</div>
+<div class="flex gap-1 md:opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+<button class="p-2 rounded-lg hover:bg-surface-accent text-text-muted hover:text-amber-warn transition-colors"><span class="material-symbols-outlined text-xl">pause</span></button>
+<button class="p-2 rounded-lg hover:bg-surface-accent text-text-muted hover:text-error transition-colors"><span class="material-symbols-outlined text-xl">stop</span></button>
+</div>
+</div>
+<div class="space-y-sm">
+<div class="flex justify-between font-data-sm text-xs md:text-data-sm">
+<span class="text-text-muted">12% Completed</span>
+<span class="text-emerald-live font-medium">102.1 MB/s</span>
+</div>
+<div class="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full glow-blue" style="width: 12%"></div>
+</div>
+<div class="flex justify-between text-[11px] font-data-sm text-text-muted uppercase tracking-wider">
+<span>ETA: 01:05s</span>
+<span>420 MB / 3.4 GB</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- File Management Ledger -->
+<section class="glass-panel rounded-2xl overflow-hidden">
+<div class="p-md md:p-lg border-b border-glass-stroke flex flex-col md:flex-row md:items-center justify-between gap-md">
+<h3 class="font-headline-sm text-headline-sm text-text-primary">File Ledger</h3>
+<div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-primary">filter_list</span>
+<input class="bg-surface-container/50 border border-glass-stroke rounded-lg py-2.5 pl-10 pr-4 text-body-sm w-full sm:w-48 lg:w-64 focus:ring-1 focus:ring-primary focus:outline-none transition-all touch-manipulation" placeholder="Search files..." type="text"/>
+</div>
+<div class="flex rounded-lg border border-glass-stroke overflow-hidden h-11 sm:h-10">
+<button class="flex-1 sm:flex-none px-4 py-2 bg-primary/10 text-primary font-data-sm text-data-sm font-bold">All</button>
+<button class="flex-1 sm:flex-none px-4 py-2 text-text-muted font-data-sm text-data-sm hover:bg-white/5 transition-colors">Live</button>
+</div>
+</div>
+</div>
+<!-- Desktop Table View -->
+<div class="hidden md:block overflow-x-auto custom-scrollbar">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low/50">
+<tr>
+<th class="px-lg py-4 font-label-caps text-label-caps text-text-muted uppercase tracking-widest">Filename</th>
+<th class="px-lg py-4 font-label-caps text-label-caps text-text-muted uppercase tracking-widest">Pixeldrain URL</th>
+<th class="px-lg py-4 font-label-caps text-label-caps text-text-muted uppercase tracking-widest">Status</th>
+<th class="px-lg py-4 font-label-caps text-label-caps text-text-muted uppercase tracking-widest">Last Touched</th>
+<th class="px-lg py-4 font-label-caps text-label-caps text-text-muted uppercase tracking-widest text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-glass-stroke">
+<tr class="hover:bg-white/[0.02] transition-colors group">
+<td class="px-lg py-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">description</span>
+<span class="font-body-md text-body-md font-medium text-text-primary">Project_Zion_Backup.zip</span>
+</div>
+</td>
+<td class="px-lg py-4">
+<span class="bg-primary/5 text-primary border border-primary/20 px-2 py-1 rounded font-data-sm text-data-sm group-hover:bg-primary group-hover:text-on-primary-container transition-colors cursor-pointer">pixeldrain.com/u/z93f8s</span>
+</td>
+<td class="px-lg py-4">
+<div class="flex items-center gap-2 text-emerald-live font-data-sm text-data-sm">
+<div class="relative flex h-2 w-2">
+<span class="pulse-emerald absolute inline-flex h-full w-full rounded-full bg-emerald-live opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-live"></span>
+</div>
+                            Live
+                        </div>
+</td>
+<td class="px-lg py-4 font-data-sm text-data-sm text-text-muted">2023-11-24 14:02</td>
+<td class="px-lg py-4">
+<div class="flex items-center justify-end gap-3">
+<button class="material-symbols-outlined text-text-muted hover:text-emerald-live transition-colors" title="Touch">bolt</button>
+<button class="material-symbols-outlined text-text-muted hover:text-primary transition-colors" title="Copy">content_copy</button>
+<button class="material-symbols-outlined text-text-muted hover:text-error transition-colors" title="Delete">delete</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-white/[0.02] transition-colors group">
+<td class="px-lg py-4">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-text-muted">image</span>
+<span class="font-body-md text-body-md font-medium text-text-primary">Branding_Assets_Final_v2.ai</span>
+</div>
+</td>
+<td class="px-lg py-4">
+<span class="bg-primary/5 text-primary border border-primary/20 px-2 py-1 rounded font-data-sm text-data-sm group-hover:bg-primary group-hover:text-on-primary-container transition-colors cursor-pointer">pixeldrain.com/u/9dk2ls</span>
+</td>
+<td class="px-lg py-4">
+<div class="flex items-center gap-2 text-emerald-live font-data-sm text-data-sm">
+<div class="relative flex h-2 w-2">
+<span class="pulse-emerald absolute inline-flex h-full w-full rounded-full bg-emerald-live opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-live"></span>
+</div>
+                            Live
+                        </div>
+</td>
+<td class="px-lg py-4 font-data-sm text-data-sm text-text-muted">2023-11-24 11:30</td>
+<td class="px-lg py-4">
+<div class="flex items-center justify-end gap-3">
+<button class="material-symbols-outlined text-text-muted hover:text-emerald-live transition-colors">bolt</button>
+<button class="material-symbols-outlined text-text-muted hover:text-primary transition-colors">content_copy</button>
+<button class="material-symbols-outlined text-text-muted hover:text-error transition-colors">delete</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Mobile Card List View -->
+<div class="md:hidden divide-y divide-glass-stroke">
+<div class="p-md space-y-3 bg-white/[0.02]">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-3 overflow-hidden">
+<span class="material-symbols-outlined text-primary">description</span>
+<span class="font-body-md text-body-md font-bold text-text-primary truncate">Project_Zion_Backup.zip</span>
+</div>
+<div class="flex items-center gap-1.5 text-emerald-live font-data-sm text-xs shrink-0">
+<div class="h-1.5 w-1.5 rounded-full bg-emerald-live pulse-emerald"></div>
+                        Live
+                    </div>
+</div>
+<div class="bg-surface-container-highest/30 p-2 rounded border border-glass-stroke text-xs font-data-sm text-primary truncate">
+                    pixeldrain.com/u/z93f8s
+                </div>
+<div class="flex items-center justify-between pt-2">
+<span class="text-[10px] text-text-muted uppercase">Touched 2h ago</span>
+<div class="flex items-center gap-3">
+<button class="p-2 bg-surface-accent rounded text-text-primary material-symbols-outlined text-lg">bolt</button>
+<button class="p-2 bg-surface-accent rounded text-text-primary material-symbols-outlined text-lg">content_copy</button>
+<button class="p-2 bg-error/10 text-error rounded material-symbols-outlined text-lg">delete</button>
+</div>
+</div>
+</div>
+<div class="p-md space-y-3">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-3 overflow-hidden">
+<span class="material-symbols-outlined text-text-muted">image</span>
+<span class="font-body-md text-body-md font-bold text-text-primary truncate">Branding_Assets_Final_v2.ai</span>
+</div>
+<div class="flex items-center gap-1.5 text-emerald-live font-data-sm text-xs shrink-0">
+<div class="h-1.5 w-1.5 rounded-full bg-emerald-live pulse-emerald"></div>
+                        Live
+                    </div>
+</div>
+<div class="bg-surface-container-highest/30 p-2 rounded border border-glass-stroke text-xs font-data-sm text-primary truncate">
+                    pixeldrain.com/u/9dk2ls
+                </div>
+<div class="flex items-center justify-between pt-2">
+<span class="text-[10px] text-text-muted uppercase">Touched 5h ago</span>
+<div class="flex items-center gap-3">
+<button class="p-2 bg-surface-accent rounded text-text-primary material-symbols-outlined text-lg">bolt</button>
+<button class="p-2 bg-surface-accent rounded text-text-primary material-symbols-outlined text-lg">content_copy</button>
+<button class="p-2 bg-error/10 text-error rounded material-symbols-outlined text-lg">delete</button>
+</div>
+</div>
+</div>
+</div>
+<div class="p-md bg-surface-container-low/30 border-t border-glass-stroke flex items-center justify-between">
+<span class="text-[10px] md:text-xs text-text-muted font-data-sm">1-10 of 1.4k</span>
+<div class="flex gap-1 scale-90 md:scale-100 origin-right">
+<button class="p-1 px-3 rounded border border-glass-stroke text-text-muted hover:bg-white/5 transition-colors">Prev</button>
+<button class="p-1 px-3 rounded border border-primary text-primary bg-primary/5 font-bold">1</button>
+<button class="p-1 px-3 rounded border border-glass-stroke text-text-muted hover:bg-white/5 transition-colors">Next</button>
+</div>
+</div>
+</section>
+</main>
+<script>
+    // Robust touch interaction feedback
+    document.querySelectorAll('a, button, [role="button"]').forEach(el => {
+        el.addEventListener('touchstart', () => {
+            el.classList.add('scale-95');
+            el.classList.add('opacity-80');
+        }, {passive: true});
+        el.addEventListener('touchend', () => {
+            el.classList.remove('scale-95');
+            el.classList.remove('opacity-80');
+        }, {passive: true});
+        
+        // Mouse fallbacks
+        el.addEventListener('mousedown', () => el.classList.add('scale-95'));
+        el.addEventListener('mouseup', () => el.classList.remove('scale-95'));
+        el.addEventListener('mouseleave', () => el.classList.remove('scale-95'));
+    });
+
+    // Simple URL validation highlighting with improved visuals
+    const missionInput = document.querySelector('input[placeholder*="source URL"]');
+    missionInput.addEventListener('input', (e) => {
+        const val = e.target.value.toLowerCase();
+        if(val.startsWith('http')) {
+            e.target.classList.add('text-emerald-live', 'border-emerald-live/50');
+            e.target.classList.remove('text-primary', 'border-glass-stroke');
+        } else if(val.length > 0) {
+            e.target.classList.add('text-error', 'border-error/50');
+            e.target.classList.remove('text-emerald-live', 'text-primary');
+        } else {
+            e.target.classList.remove('text-emerald-live', 'text-error', 'border-emerald-live/50', 'border-error/50');
+            e.target.classList.add('text-primary', 'border-glass-stroke');
+        }
+    });
+
+    // Real-time status toggle simulation for demo
+    let statusActive = true;
+    const clusterStatus = document.querySelector('.sse-pulse');
+    setInterval(() => {
+        if (clusterStatus) {
+            clusterStatus.classList.toggle('sse-pulse');
+        }
+    }, 3000);
+</script>
+</body></html>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PixelTouch Manager | Mission Control</title>
+  <title>PixelTouch | Media & Screenshot Gallery Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -17,10 +17,10 @@
     <div class="auth-card glass-panel">
       <div class="auth-header">
         <div class="brand-icon">
-          <span class="material-symbols-outlined" style="font-size: 32px;">hub</span>
+          <span class="material-symbols-outlined" style="font-size: 32px;">photo_library</span>
         </div>
-        <h2>PixelTouch Manager</h2>
-        <p>Enter Admin PIN to access mission control</p>
+        <h2>PixelTouch Gallery</h2>
+        <p>Enter Admin PIN to access media studio</p>
       </div>
 
       <form id="pinForm" onsubmit="handlePinSubmit(event)">
@@ -63,20 +63,20 @@
     <aside class="app-sidebar">
       <div style="margin-bottom: 24px; padding: 0 4px;">
         <h1 class="sidebar-brand-title">PixelTouch</h1>
-        <p class="mono" style="font-size: 0.725rem; color: var(--text-muted); margin-top: 2px;">V3.1.2 Status: Active</p>
+        <p class="mono" style="font-size: 0.725rem; color: var(--text-muted); margin-top: 2px;">Media Studio V3.1.2</p>
       </div>
 
-      <button class="btn-submit glow-blue" style="width: 100%; justify-content: center; margin-bottom: 20px; padding: 10px 16px; font-size: 0.9rem;" onclick="document.getElementById('downloadUrlInput').focus()">
-        <span class="material-symbols-outlined" style="font-size: 20px;">add_circle</span>
-        New Download
-      </button>
+      <a href="/" class="btn-submit glow-blue" style="width: 100%; justify-content: center; margin-bottom: 20px; padding: 10px 16px; font-size: 0.9rem; text-decoration: none;">
+        <span class="material-symbols-outlined" style="font-size: 20px;">dashboard</span>
+        Command Dashboard
+      </a>
 
       <nav class="sidebar-nav-list">
-        <a href="#" class="sidebar-nav-item active">
+        <a href="/" class="sidebar-nav-item">
           <span class="material-symbols-outlined">dashboard</span>
           <span>Command</span>
         </a>
-        <a href="/gallery" class="sidebar-nav-item">
+        <a href="/gallery" class="sidebar-nav-item active">
           <span class="material-symbols-outlined">photo_library</span>
           <span>Gallery</span>
         </a>
@@ -86,7 +86,7 @@
     <!-- TOP NAVIGATION BAR -->
     <header class="app-topbar">
       <div class="header-left">
-        <span class="brand-title">PixelTouch Manager</span>
+        <span class="brand-title">PixelTouch Media Studio</span>
       </div>
 
       <div class="header-right">
@@ -112,128 +112,62 @@
     <!-- MAIN CONTENT CANVAS -->
     <main class="main-content-canvas">
 
-      <!-- TASK SUBMISSION SECTION -->
+      <!-- GALLERY HERO SECTION -->
       <section class="glass-panel" style="padding: 24px; border-radius: var(--radius-xl); margin-bottom: 24px;">
-        <div class="flex-between" style="margin-bottom: 16px;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <h2 style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">Mission Control</h2>
-            <span class="tech-tag" style="display: flex; align-items: center; gap: 6px;">
-              <span class="material-symbols-outlined" style="font-size: 14px;">shield</span>
-              16 Connect Enforcement
-            </span>
-          </div>
-        </div>
-
-        <form id="downloadForm" onsubmit="handleDownloadSubmit(event)" class="submission-form" style="margin: 0;">
-          <div class="input-group">
-            <input type="url" id="downloadUrlInput" class="glow-input" placeholder="Enter source URL (https://... or magnet:...)" required>
-            <input type="text" id="customFilenameInput" class="glow-input" placeholder="Optional filename (e.g. video.mp4)">
-            <button type="submit" class="btn-submit glow-blue" id="btnSubmitDownload">
-              <span class="material-symbols-outlined">rocket_launch</span>
-              Execute
-            </button>
-          </div>
-        </form>
-
-        <!-- Active Downloads Progress List -->
-        <div id="activeDownloadsContainer" style="margin-top: 20px;">
-          <div id="activeDownloadsList" class="downloads-list"></div>
-          <div class="empty-state" id="downloadsEmptyState">
-            <span style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-              <span class="material-symbols-outlined" style="font-size: 20px; color: var(--text-muted);">inbox</span>
-              No active downloads running in Aria2 queue
-            </span>
-          </div>
-        </div>
-      </section>
-
-      <!-- FILE MANAGEMENT LEDGER -->
-      <section id="ledgerSection" class="glass-panel" style="padding: 24px; border-radius: var(--radius-xl);">
-        <div class="flex-between" style="margin-bottom: 16px;">
+        <div class="flex-between" style="flex-wrap: wrap; gap: 16px;">
           <div>
-            <h2 style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
-              <span class="material-symbols-outlined" style="color: var(--color-electric-blue);">inventory_2</span>
-              File Ledger
+            <h2 style="font-size: 1.3rem; font-weight: 800; color: var(--text-primary); display: flex; align-items: center; gap: 10px;">
+              <span class="material-symbols-outlined" style="color: var(--color-electric-blue); font-size: 28px;">movie_filter</span>
+              Media & Screenshot Studio
             </h2>
-            <p class="section-desc">Stored records in local flat-file database (`data/files.json`)</p>
           </div>
 
-          <div class="header-actions">
-            <button class="btn-action pulse-btn" onclick="triggerTouchAll()" id="btnTouchAll">
-              <span class="material-symbols-outlined" style="font-size: 18px;">bolt</span>
-              Touch All LIVE Files
-            </button>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <div class="badge-pill">
+              <span class="badge-label">Total Files</span>
+              <span class="badge-val" id="statTotalMedia">0</span>
+            </div>
           </div>
         </div>
 
-        <div class="filter-bar">
-          <div class="search-box">
+        <!-- Gallery Toolbar -->
+        <div class="filter-bar" style="margin-top: 20px;">
+          <div class="search-box" style="max-width: 380px;">
             <span class="material-symbols-outlined" style="font-size: 18px;">search</span>
-            <input type="text" id="searchInput" oninput="resetPageAndRender()" placeholder="Search by filename or ID..." class="glow-input">
+            <input type="text" id="gallerySearchInput" oninput="renderGalleryPage()" placeholder="Search media by title or ID..." class="glow-input">
           </div>
 
-          <div class="status-filter-pills">
-            <button class="filter-pill active" onclick="setFilter('ALL', this)">All (<span id="countAll">0</span>)</button>
-            <button class="filter-pill" onclick="setFilter('LIVE', this)">LIVE (<span id="countLive">0</span>)</button>
-            <button class="filter-pill" onclick="setFilter('DEAD', this)">DEAD (<span id="countDead">0</span>)</button>
-          </div>
-
-          <!-- Top Pagination Controls -->
-          <div class="pagination-controls">
+          <div style="display: flex; gap: 16px; margin-left: auto; flex-wrap: wrap;">
             <div class="page-size-selector">
-              <label for="pageSizeSelect">Show:</label>
-              <select id="pageSizeSelect" onchange="changePageSize(this.value)">
-                <option value="10">10</option>
-                <option value="25" selected>25</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
+              <label for="galleryGridColsSelect">Grid:</label>
+              <select id="galleryGridColsSelect" onchange="changeGridColumns(this.value)" class="glow-input">
+                <option value="2">2 Grid</option>
+                <option value="3">3 Grid</option>
+                <option value="4" selected>4 Grid</option>
+                <option value="5">5 Grid</option>
+                <option value="6">6 Grid</option>
               </select>
             </div>
 
-            <div class="page-nav-buttons">
-              <button class="btn-page-nav" id="btnPrevPageTop" onclick="changePage(-1)" title="Previous Page">❮</button>
-              <span id="pageInfoTop" class="page-info-text">Page 1 of 1</span>
-              <button class="btn-page-nav" id="btnNextPageTop" onclick="changePage(1)" title="Next Page">❯</button>
+            <div class="page-size-selector">
+              <label for="gallerySortSelect">Sort:</label>
+              <select id="gallerySortSelect" onchange="renderGalleryPage()" class="glow-input">
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="name">Title A-Z</option>
+                <option value="size">Largest Size</option>
+              </select>
             </div>
           </div>
         </div>
 
-        <!-- Ledger Table (Desktop) -->
-        <div class="table-responsive desktop-only-table">
-          <table class="ledger-table">
-            <thead>
-              <tr>
-                <th style="width: 145px;">Preview</th>
-                <th>Filename</th>
-                <th>Pixeldrain Link</th>
-                <th>Status</th>
-                <th>Last Touched</th>
-                <th class="text-right" style="width: 150px;">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="ledgerTableBody">
-              <!-- Rendered via Javascript -->
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Ledger Mobile Card View (Vertical Phone Mode) -->
-        <div id="ledgerMobileCards" class="ledger-mobile-cards mobile-only-cards">
+        <!-- Gallery Grid -->
+        <div id="galleryGridContainer" class="gallery-grid" style="margin-top: 24px;">
           <!-- Rendered via Javascript -->
         </div>
 
-        <div id="ledgerEmptyState" class="empty-state hidden">
-          <span>No records found in database.</span>
-        </div>
-
-        <!-- Bottom Pagination Bar -->
-        <div class="pagination-bar-bottom flex-between" style="margin-top: 16px;">
-          <span id="showingEntriesText" class="section-desc">Showing 0 to 0 of 0 entries</span>
-          <div class="page-nav-buttons">
-            <button class="btn-page-nav" id="btnPrevPageBottom" onclick="changePage(-1)">❮ Prev</button>
-            <span id="pageInfoBottom" class="page-info-text">Page 1 of 1</span>
-            <button class="btn-page-nav" id="btnNextPageBottom" onclick="changePage(1)">Next ❯</button>
-          </div>
+        <div id="galleryEmptyState" class="empty-state hidden" style="margin-top: 24px; padding: 40px;">
+          <span style="font-size: 1rem; color: var(--text-muted);">No media files or screenshot frames found matching your filters.</span>
         </div>
       </section>
 
@@ -241,11 +175,11 @@
 
     <!-- MOBILE BOTTOM NAVIGATION BAR -->
     <nav class="mobile-bottom-nav">
-      <a href="#" class="mobile-nav-link active">
+      <a href="/" class="mobile-nav-link">
         <span class="material-symbols-outlined">dashboard</span>
         <span>Command</span>
       </a>
-      <a href="/gallery" class="mobile-nav-link">
+      <a href="/gallery" class="mobile-nav-link active">
         <span class="material-symbols-outlined">photo_library</span>
         <span>Gallery</span>
       </a>
@@ -295,11 +229,11 @@
 
       <!-- Main Stage Preview -->
       <div class="gallery-stage-container">
-        <button class="gallery-nav-btn prev" onclick="prevGalleryImage()" title="Previous Frame (Left Arrow)">❮</button>
+        <button class="gallery-nav-btn prev" onclick="prevGalleryImage()" title="Previous Frame (Left Arrow ❮)">❮</button>
         <div class="gallery-main-stage">
           <img id="galleryMainImage" src="" alt="Screenshot Frame Preview" />
         </div>
-        <button class="gallery-nav-btn next" onclick="nextGalleryImage()" title="Next Frame (Right Arrow)">❯</button>
+        <button class="gallery-nav-btn next" onclick="nextGalleryImage()" title="Next Frame (Right Arrow ❯)">❯</button>
       </div>
 
       <!-- Thumbnail Strip Below -->
@@ -312,6 +246,6 @@
   <!-- TOAST NOTIFICATION SYSTEM -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="app.js"></script>
+  <script src="gallery.js"></script>
 </body>
 </html>

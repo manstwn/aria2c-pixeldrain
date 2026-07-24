@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 /**
  * Format raw bytes into human readable size (e.g. 14.2 MB)
@@ -10,6 +11,24 @@ function formatBytes(bytes) {
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+/**
+ * Format duration in seconds into HH:MM:SS or MM:SS string
+ */
+function formatDuration(seconds) {
+  if (seconds === undefined || seconds === null || isNaN(seconds) || seconds <= 0) return '';
+  const secs = Math.floor(seconds);
+  const hrs = Math.floor(secs / 3600);
+  const mins = Math.floor((secs % 3600) / 60);
+  const remainderSecs = secs % 60;
+
+  const pad = (n) => (n < 10 ? '0' + n : '' + n);
+
+  if (hrs > 0) {
+    return `${hrs}:${pad(mins)}:${pad(remainderSecs)}`;
+  }
+  return `${pad(mins)}:${pad(remainderSecs)}`;
 }
 
 /**
@@ -168,9 +187,9 @@ function parseMP4(buf) {
         const version = buf[offset + 8];
         const widthOffset = version === 1 ? offset + 92 : offset + 84;
         const heightOffset = widthOffset + 4;
-        if (heightOffset + 2 <= buf.length) {
-          const w = buf.readUInt16BE(widthOffset);
-          const h = buf.readUInt16BE(heightOffset);
+        if (heightOffset + 4 <= buf.length) {
+          const w = buf.readUInt32BE(widthOffset) >> 16;
+          const h = buf.readUInt32BE(heightOffset) >> 16;
           if (w > 0 && h > 0) {
             width = w;
             height = h;
@@ -196,9 +215,49 @@ function parseMP4(buf) {
     }
   } catch (e) {}
 
-  if (width > 0 && height > 0) {
-    return { width, height, durationSeconds };
+  if (width > 0 || height > 0 || durationSeconds > 0) {
+    return { width: width || null, height: height || null, durationSeconds };
   }
+  return null;
+}
+
+/**
+ * Use ffprobe to extract accurate duration and dimensions for video files
+ */
+function getVideoMetadataFFprobe(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return null;
+  try {
+    const cmd = `ffprobe -v error -select_streams v:0 -show_entries stream=width,height,duration -show_entries format=duration -of json "${filePath}"`;
+    const output = execSync(cmd, { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+    const parsed = JSON.parse(output);
+
+    let durationSeconds = 0;
+    let width = 0;
+    let height = 0;
+
+    if (parsed.format && parsed.format.duration) {
+      durationSeconds = parseFloat(parsed.format.duration);
+    }
+
+    if (parsed.streams && parsed.streams[0]) {
+      const stream = parsed.streams[0];
+      if (stream.width && stream.height) {
+        width = stream.width;
+        height = stream.height;
+      }
+      if (!durationSeconds && stream.duration) {
+        durationSeconds = parseFloat(stream.duration);
+      }
+    }
+
+    if (durationSeconds > 0 || (width > 0 && height > 0)) {
+      return {
+        width: width || null,
+        height: height || null,
+        durationSeconds: Math.round(durationSeconds)
+      };
+    }
+  } catch (e) {}
   return null;
 }
 
@@ -236,33 +295,51 @@ function extractMetadata(filePath, sourceUrl = '') {
     resolution: '',
     width: null,
     height: null,
+    duration_seconds: 0,
     duration_formatted: ''
   };
 
   try {
-    if (headerBuf) {
-      let mediaInfo = null;
-      if (typeInfo.category === 'image') {
-        mediaInfo = parsePNG(headerBuf) || parseJPEG(headerBuf) || parseGIF(headerBuf) || parseWEBP(headerBuf);
-      } else if (typeInfo.category === 'video') {
-        mediaInfo = parseMP4(headerBuf);
+    if (typeInfo.category === 'video') {
+      // 1. Primary video metadata extraction via ffprobe
+      const ffprobeMeta = getVideoMetadataFFprobe(filePath);
+      if (ffprobeMeta) {
+        if (ffprobeMeta.width && ffprobeMeta.height) {
+          meta.width = ffprobeMeta.width;
+          meta.height = ffprobeMeta.height;
+          meta.resolution = `${ffprobeMeta.width}x${ffprobeMeta.height}`;
+        }
+        if (ffprobeMeta.durationSeconds) {
+          meta.duration_seconds = ffprobeMeta.durationSeconds;
+          meta.duration_formatted = formatDuration(ffprobeMeta.durationSeconds);
+        }
       }
 
-      if (mediaInfo) {
-        if (mediaInfo.width && mediaInfo.height) {
-          meta.width = mediaInfo.width;
-          meta.height = mediaInfo.height;
-          meta.resolution = `${mediaInfo.width}x${mediaInfo.height}`;
+      // 2. Secondary fallback via header buffer parsing if ffprobe didn't get values
+      if (headerBuf && (!meta.duration_formatted || !meta.resolution)) {
+        const mediaInfo = parseMP4(headerBuf);
+        if (mediaInfo) {
+          if (!meta.resolution && mediaInfo.width && mediaInfo.height) {
+            meta.width = mediaInfo.width;
+            meta.height = mediaInfo.height;
+            meta.resolution = `${mediaInfo.width}x${mediaInfo.height}`;
+          }
+          if (!meta.duration_formatted && mediaInfo.durationSeconds) {
+            meta.duration_seconds = mediaInfo.durationSeconds;
+            meta.duration_formatted = formatDuration(mediaInfo.durationSeconds);
+          }
         }
-        if (mediaInfo.durationSeconds) {
-          const mins = Math.floor(mediaInfo.durationSeconds / 60);
-          const secs = mediaInfo.durationSeconds % 60;
-          meta.duration_formatted = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-        }
+      }
+    } else if (typeInfo.category === 'image' && headerBuf) {
+      const mediaInfo = parsePNG(headerBuf) || parseJPEG(headerBuf) || parseGIF(headerBuf) || parseWEBP(headerBuf);
+      if (mediaInfo && mediaInfo.width && mediaInfo.height) {
+        meta.width = mediaInfo.width;
+        meta.height = mediaInfo.height;
+        meta.resolution = `${mediaInfo.width}x${mediaInfo.height}`;
       }
     }
   } catch (err) {
-    console.warn(`[Metadata Warning] Error parsing headers for ${filename}:`, err.message);
+    console.warn(`[Metadata Warning] Error parsing metadata for ${filename}:`, err.message);
   }
 
   return meta;
@@ -270,6 +347,8 @@ function extractMetadata(filePath, sourceUrl = '') {
 
 module.exports = {
   formatBytes,
+  formatDuration,
   getCategory,
   extractMetadata
 };
+
