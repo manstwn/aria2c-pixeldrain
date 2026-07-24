@@ -84,16 +84,36 @@ async function touchFileRecord(file) {
 }
 
 /**
- * Touch all files in database sequentially with randomized delay
+ * Touch files that are 30+ days old since created_at.
+ * Files younger than 30 days don't need touching — Pixeldrain won't expire them yet.
  */
 async function touchAllFiles() {
   const files = db.getAllFiles();
-  console.log(`[TouchManager] Starting batch touch process for ${files.length} records...`);
+  const now = Date.now();
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+  const eligibleFiles = files.filter(file => {
+    const createdAt = file.created_at ? new Date(file.created_at).getTime() : 0;
+    const ageMs = now - createdAt;
+    if (ageMs < THIRTY_DAYS_MS) {
+      const daysOld = Math.floor(ageMs / (24 * 60 * 60 * 1000));
+      console.log(`[TouchManager] Skipping ${file.filename || file.id} — only ${daysOld} day(s) old, not yet 30 days.`);
+      return false;
+    }
+    return true;
+  });
+
+  console.log(`[TouchManager] Batch touch: ${eligibleFiles.length} eligible (30+ days old) out of ${files.length} total records.`);
+
+  if (eligibleFiles.length === 0) {
+    console.log('[TouchManager] No files need touching today.');
+    return { touchedCount: 0, deadCount: 0, total: files.length, skipped: files.length };
+  }
 
   let touchedCount = 0;
   let deadCount = 0;
 
-  for (const file of files) {
+  for (const file of eligibleFiles) {
     const result = await touchFileRecord(file);
     if (result && result.success) {
       touchedCount++;
@@ -105,17 +125,18 @@ async function touchAllFiles() {
     await sleep(delay);
   }
 
-  console.log(`[TouchManager] Batch touch complete. Touched: ${touchedCount} | Dead: ${deadCount} | Total: ${files.length}`);
-  return { touchedCount, deadCount, total: files.length };
+  console.log(`[TouchManager] Batch touch complete. Touched: ${touchedCount} | Dead: ${deadCount} | Skipped (< 30 days): ${files.length - eligibleFiles.length}`);
+  return { touchedCount, deadCount, total: files.length, skipped: files.length - eligibleFiles.length };
 }
 
 /**
  * Initialize daily cron scheduler (Runs every day at midnight 00:00)
+ * Checks each file's created_at age — only touches files 30+ days old.
  */
 function initScheduler() {
-  console.log('[TouchManager] Initializing daily cron scheduler (0 0 * * *)...');
+  console.log('[TouchManager] Initializing daily cron scheduler (0 0 * * *) — will touch files aged 30+ days...');
   cron.schedule('0 0 * * *', async () => {
-    console.log('[TouchManager] Daily cron triggered! Running batch file touch...');
+    console.log('[TouchManager] Daily cron triggered! Checking file ages and touching eligible records...');
     try {
       await touchAllFiles();
     } catch (err) {
