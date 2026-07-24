@@ -35,12 +35,13 @@ async function touchFileRecord(file) {
   const targetBytes = fileSize > 0 ? Math.ceil(fileSize * 0.12) : 1024;
   const rangeHeader = fileSize > 0 ? `bytes=0-${targetBytes}` : 'bytes=0-1024';
   const filename = file.filename || file.original_filename || 'file';
-  const targetUrl = `https://pixeldrain.com/api/file/${file.pixeldrain_id}/${encodeURIComponent(filename)}`;
+  const pageUrl = file.download_url || `https://pixeldrain.com/u/${file.pixeldrain_id}`;
+  const directFileUrl = `https://pixeldrain.com/api/file/${file.pixeldrain_id}`;
 
-  console.log(`[TouchManager] Pinging & 12% chunk-downloading (${Math.round(targetBytes / 1024)} KB) for ${filename} | Target: ${targetUrl}...`);
+  console.log(`[TouchManager] Pinging & 12% chunk-downloading (${Math.round(targetBytes / 1024)} KB) for ${filename} | Page: ${pageUrl} | Direct File: ${directFileUrl}`);
 
   try {
-    const response = await axios.get(targetUrl, {
+    const response = await axios.get(directFileUrl, {
       headers: {
         'User-Agent': USER_AGENT,
         'Accept': '*/*',
@@ -50,10 +51,6 @@ async function touchFileRecord(file) {
       responseType: 'stream',
       validateStatus: s => s < 500
     });
-
-    const finalEndpointUrl = (response.request && response.request.res && response.request.res.responseUrl)
-      || (response.request && response.request.responseUrl)
-      || targetUrl;
 
     if (response.data && typeof response.data.destroy === 'function') {
       response.data.destroy();
@@ -67,16 +64,16 @@ async function touchFileRecord(file) {
         last_touched: new Date().toISOString(),
         status: 'LIVE'
       });
-      console.log(`[TouchManager] ✅ Touch successful (12% downloaded) for ${filename} | Real Endpoint: ${finalEndpointUrl}`);
+      console.log(`[TouchManager] ✅ Touch successful (12% downloaded) for ${filename} | Page: ${pageUrl} | Direct File: ${directFileUrl}`);
       return { success: true, status: 'LIVE', file: updated };
 
     } else if (isNotFound) {
       const updated = db.updateFile(file.id, { status: 'DEAD' });
-      console.warn(`[TouchManager] ❌ Touch FAILED (404) for ${filename} | Real Endpoint: ${finalEndpointUrl}. Marked DEAD.`);
+      console.warn(`[TouchManager] ❌ Touch FAILED (404) for ${filename} | Page: ${pageUrl} | Direct File: ${directFileUrl}. Marked DEAD.`);
       return { success: false, status: 'DEAD', file: updated };
 
     } else {
-      console.warn(`[TouchManager] Received HTTP ${response.status} for ${filename} | Real Endpoint: ${finalEndpointUrl}. Leaving status untouched.`);
+      console.warn(`[TouchManager] Received HTTP ${response.status} for ${filename} | Direct File: ${directFileUrl}. Leaving status untouched.`);
       return { success: false, status: file.status, file };
     }
 
