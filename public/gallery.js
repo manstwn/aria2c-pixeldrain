@@ -254,15 +254,15 @@ function renderGalleryPage() {
       ? `<span class="gallery-cover-badge">⏱️ ${escapeHtml(durationText)}</span>`
       : (cat === 'video' ? `<span class="gallery-cover-badge">🎬 Video</span>` : '');
 
-    // Cover HTML with Mouse Hover Scrubbing Support
+    // Cover HTML with smooth automatic slideshow on cursor hover
     let coverHTML = '';
     if (thumbUrl) {
       coverHTML = `
         <div class="gallery-card-cover"
-             onmousemove="handleHoverScrub(event, this, '${file.id}')"
-             onmouseleave="resetHoverScrub(this, '${file.id}')"
+             onmouseenter="startHoverSlideshow(this, '${file.id}')"
+             onmouseleave="stopHoverSlideshow(this, '${file.id}')"
              onclick="openGalleryModal('${file.id}')"
-             title="Hover to scrub frames • Click to open lightbox">
+             title="Hover to auto-preview frames • Click to open lightbox">
           <img id="coverImg_${file.id}" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(displayName)}" />
           ${topBadgeHTML}
         </div>
@@ -322,28 +322,34 @@ function renderGalleryPage() {
   }).join('');
 }
 
-// Mouseover hover scrubber logic
-function handleHoverScrub(event, element, fileId) {
+// Automatic Smooth Frame Slideshow on Hover
+const hoverSlideshowIntervals = {};
+
+function startHoverSlideshow(element, fileId) {
   const file = ledgerFiles.find(f => f.id === fileId);
-  if (!file || !file.thumbnails || file.thumbnails.length === 0) return;
+  if (!file || !file.thumbnails || file.thumbnails.length <= 1) return;
 
-  const rect = element.getBoundingClientRect();
-  const mouseX = Math.max(0, Math.min(event.clientX - rect.left, rect.width));
-  const ratio = mouseX / rect.width;
-  const index = Math.min(Math.floor(ratio * file.thumbnails.length), file.thumbnails.length - 1);
+  stopHoverSlideshow(element, fileId);
 
+  let frameIdx = 0;
   const imgEl = document.getElementById(`coverImg_${fileId}`);
-  if (imgEl && file.thumbnails[index]) {
-    imgEl.src = file.thumbnails[index];
-  }
+  if (!imgEl) return;
+
+  hoverSlideshowIntervals[fileId] = setInterval(() => {
+    frameIdx = (frameIdx + 1) % file.thumbnails.length;
+    imgEl.src = file.thumbnails[frameIdx];
+  }, 400);
 }
 
-function resetHoverScrub(element, fileId) {
-  const file = ledgerFiles.find(f => f.id === fileId);
-  if (!file || !file.thumbnails || file.thumbnails.length === 0) return;
+function stopHoverSlideshow(element, fileId) {
+  if (hoverSlideshowIntervals[fileId]) {
+    clearInterval(hoverSlideshowIntervals[fileId]);
+    delete hoverSlideshowIntervals[fileId];
+  }
 
+  const file = ledgerFiles.find(f => f.id === fileId);
   const imgEl = document.getElementById(`coverImg_${fileId}`);
-  if (imgEl) {
+  if (imgEl && file && file.thumbnails && file.thumbnails.length > 0) {
     imgEl.src = file.thumbnails[0];
   }
 }
