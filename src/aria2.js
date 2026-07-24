@@ -381,10 +381,66 @@ async function removeDownload(gid) {
   }
 }
 
+/**
+ * Pause all queued downloads in Aria2
+ */
+async function pauseAll() {
+  try {
+    await rpcCall('aria2.pauseAll');
+    return true;
+  } catch (err) {
+    console.error('[Aria2] Failed to pause all tasks:', err.message);
+    throw err;
+  }
+}
+
+/**
+ * Unpause/resume all queued downloads in Aria2
+ */
+async function unpauseAll() {
+  try {
+    await rpcCall('aria2.unpauseAll');
+    return true;
+  } catch (err) {
+    console.error('[Aria2] Failed to unpause all tasks:', err.message);
+    throw err;
+  }
+}
+
+/**
+ * Pause a single task by GID
+ */
+async function pauseTask(gid) {
+  try {
+    await rpcCall('aria2.pause', [gid]);
+    return true;
+  } catch (err) {
+    console.error(`[Aria2] Failed to pause task ${gid}:`, err.message);
+    throw err;
+  }
+}
+
+/**
+ * Unpause/resume a single task by GID
+ */
+async function unpauseTask(gid) {
+  try {
+    await rpcCall('aria2.unpause', [gid]);
+    return true;
+  } catch (err) {
+    console.error(`[Aria2] Failed to unpause task ${gid}:`, err.message);
+    throw err;
+  }
+}
+
 module.exports = {
   checkConnection,
   addDownload,
   removeDownload,
   getDownloadsStatus,
+  pauseAll,
+  unpauseAll,
+  pauseTask,
+  unpauseTask,
   startMonitor
 };

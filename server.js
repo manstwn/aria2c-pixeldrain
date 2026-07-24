@@ -143,6 +143,43 @@ app.delete('/api/downloads/:gid', auth.requireAuth, async (req, res) => {
   }
 });
 
+/* Queue Control Endpoints */
+app.post('/api/queue/pause-all', auth.requireAuth, async (req, res) => {
+  try {
+    await aria2.pauseAll();
+    res.json({ success: true, message: 'Queue paused.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/queue/unpause-all', auth.requireAuth, async (req, res) => {
+  try {
+    await aria2.unpauseAll();
+    res.json({ success: true, message: 'Queue resumed.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/queue/:gid/pause', auth.requireAuth, async (req, res) => {
+  try {
+    await aria2.pauseTask(req.params.gid);
+    res.json({ success: true, message: 'Task paused.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/queue/:gid/unpause', auth.requireAuth, async (req, res) => {
+  try {
+    await aria2.unpauseTask(req.params.gid);
+    res.json({ success: true, message: 'Task resumed.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // File Ledger Routes
 app.get('/api/files', auth.requireAuth, (req, res) => {
   try {

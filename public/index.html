@@ -112,40 +112,73 @@
     <!-- MAIN CONTENT CANVAS -->
     <main class="main-content-canvas">
 
-      <!-- TASK SUBMISSION SECTION -->
-      <section class="glass-panel" style="padding: 24px; border-radius: var(--radius-xl); margin-bottom: 24px;">
-        <div class="flex-between" style="margin-bottom: 16px;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <h2 style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">Mission Control</h2>
-            <span class="tech-tag" style="display: flex; align-items: center; gap: 6px;">
-              <span class="material-symbols-outlined" style="font-size: 14px;">shield</span>
-              16 Connect Enforcement
-            </span>
+      <!-- TOP ROW: MISSION CONTROL (8 COLS) + DOWNLOAD QUEUE (4 COLS) -->
+      <div class="mission-queue-row">
+        <!-- MISSION CONTROL (8 COLUMNS) -->
+        <section class="glass-panel mission-control-card">
+          <div class="flex-between" style="margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <h2 style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">Mission Control</h2>
+              <span class="tech-tag" style="display: flex; align-items: center; gap: 6px;">
+                <span class="material-symbols-outlined" style="font-size: 14px;">shield</span>
+                16 Connect Enforcement
+              </span>
+            </div>
           </div>
-        </div>
 
-        <form id="downloadForm" onsubmit="handleDownloadSubmit(event)" class="submission-form" style="margin: 0;">
-          <div class="input-group">
-            <input type="url" id="downloadUrlInput" class="glow-input" placeholder="Enter source URL (https://... or magnet:...)" required>
-            <input type="text" id="customFilenameInput" class="glow-input" placeholder="Optional filename (e.g. video.mp4)">
-            <button type="submit" class="btn-submit glow-blue" id="btnSubmitDownload">
-              <span class="material-symbols-outlined">rocket_launch</span>
-              Execute
+          <form id="downloadForm" onsubmit="handleDownloadSubmit(event)" class="submission-form" style="margin: 0;">
+            <div class="input-group">
+              <input type="url" id="downloadUrlInput" class="glow-input" placeholder="Enter source URL (https://... or magnet:...)" required>
+              <input type="text" id="customFilenameInput" class="glow-input" placeholder="Optional filename (e.g. video.mp4)">
+              <button type="submit" class="btn-submit glow-blue" id="btnSubmitDownload">
+                <span class="material-symbols-outlined">rocket_launch</span>
+                Execute
+              </button>
+            </div>
+          </form>
+
+          <!-- Active Downloads Progress List -->
+          <div id="activeDownloadsContainer" style="margin-top: 20px;">
+            <div id="activeDownloadsList" class="downloads-list"></div>
+            <div class="empty-state" id="downloadsEmptyState">
+              <span style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <span class="material-symbols-outlined" style="font-size: 20px; color: var(--text-muted);">inbox</span>
+                No active tasks downloading
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <!-- DOWNLOAD QUEUE (4 COLUMNS) -->
+        <section class="glass-panel download-queue-card">
+          <div class="flex-between" style="margin-bottom: 14px; border-bottom: 1px solid var(--glass-stroke); padding-bottom: 10px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="material-symbols-outlined" style="color: var(--color-electric-blue); font-size: 20px;">format_list_bulleted</span>
+              <h2 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">Download Queue</h2>
+            </div>
+            <span class="status-indicator-pill" id="queueBadge" style="font-size: 0.725rem; font-family: var(--font-mono);">0 Queued</span>
+          </div>
+
+          <!-- Queue Control Action Bar -->
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <button class="btn-table-action primary" id="btnPauseResumeQueue" onclick="toggleQueuePause()" style="flex: 1; padding: 6px;" title="Pause or Resume Queue Processing">
+              ⏸️ Pause Queue
             </button>
           </div>
-        </form>
 
-        <!-- Active Downloads Progress List -->
-        <div id="activeDownloadsContainer" style="margin-top: 20px;">
-          <div id="activeDownloadsList" class="downloads-list"></div>
-          <div class="empty-state" id="downloadsEmptyState">
-            <span style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-              <span class="material-symbols-outlined" style="font-size: 20px; color: var(--text-muted);">inbox</span>
-              No active downloads running in Aria2 queue
+          <!-- Queue List Container -->
+          <div id="queueListContainer" class="queue-list-container">
+            <!-- Rendered dynamically via Javascript -->
+          </div>
+
+          <div id="queueEmptyState" class="empty-state" style="padding: 24px 12px; margin-top: 10px;">
+            <span style="font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; justify-content: center; gap: 6px;">
+              <span class="material-symbols-outlined" style="font-size: 18px;">queue</span>
+              No tasks waiting in queue
             </span>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
       <!-- FILE MANAGEMENT LEDGER -->
       <section id="ledgerSection" class="glass-panel" style="padding: 24px; border-radius: var(--radius-xl);">

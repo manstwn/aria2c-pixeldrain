@@ -249,96 +249,181 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+let isQueuePaused = false;
+
 function renderActiveDownloads(downloads) {
   const listEl = document.getElementById('activeDownloadsList');
   const emptyState = document.getElementById('downloadsEmptyState');
 
   if (!listEl || !emptyState) return;
 
-  const activeTasks = downloads.filter(t => t.status !== 'UPLOADED');
+  const activeDownloadingTasks = downloads.filter(t => t.status === 'active' || t.status === 'UPLOADING' || t.status === 'UPLOAD_FAILED' || t.status === 'error');
+  const queueTasks = downloads.filter(t => t.status === 'waiting' || t.status === 'paused');
+
+  // Render Queue Column
+  renderQueueTasks(queueTasks);
 
   // Update Overview Metric Counters
   const activeCountEl = document.getElementById('metricActiveTasksCount');
-  if (activeCountEl) activeCountEl.textContent = activeTasks.length;
+  if (activeCountEl) activeCountEl.textContent = activeDownloadingTasks.length;
 
   let totalSpeedBytes = 0;
-  activeTasks.forEach(task => {
+  activeDownloadingTasks.forEach(task => {
     totalSpeedBytes += (task.downloadSpeed || 0) + (task.uploadSpeed || 0);
   });
   const speedEl = document.getElementById('metricSpeedText');
   if (speedEl) speedEl.textContent = `${formatBytes(totalSpeedBytes)}/s`;
 
-  if (!activeTasks || activeTasks.length === 0) {
+  if (!activeDownloadingTasks || activeDownloadingTasks.length === 0) {
     listEl.innerHTML = '';
     emptyState.classList.remove('hidden');
+  } else {
+    emptyState.classList.add('hidden');
+
+    const itemsHTML = activeDownloadingTasks.map(task => {
+      const speed = task.downloadSpeed ? `${formatBytes(task.downloadSpeed)}/s` : '0 B/s';
+      const downloadedStr = formatBytes(task.completedLength || 0);
+      const totalStr = formatBytes(task.totalLength || 0);
+      const isUploading = task.status === 'UPLOADING';
+      const isFailed = task.status === 'UPLOAD_FAILED' || task.status === 'error';
+
+      let statusTag = `<span class="tech-tag">${task.status.toUpperCase()}</span>`;
+      if (isUploading) {
+        statusTag = `<span class="tech-tag" style="background: rgba(245,158,11,0.2); color: #f59e0b;">UPLOADING...</span>`;
+      } else if (isFailed) {
+        statusTag = `<span class="tech-tag" style="background: rgba(239,68,68,0.2); color: #f87171;">FAILED</span>`;
+      }
+
+      const errorDetailsHTML = isFailed && task.errorMessage ? `
+        <div style="margin-top: 8px; font-size: 0.8rem; color: #f87171; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); padding: 6px 10px; border-radius: 6px;">
+          ⚠️ <strong>Error Report:</strong> ${escapeHtml(task.errorMessage)}
+        </div>
+      ` : '';
+
+      const downloadStageHTML = !isUploading ? `
+        <div class="download-stats">
+          <span>Aria2 Download: <strong>${task.progress}%</strong></span>
+          <span>Downloaded: ${downloadedStr} / ${totalStr}</span>
+          <span>Speed: ⚡ <strong>${speed}</strong></span>
+        </div>
+        <div class="progress-bar-bg" style="margin-top: 10px;">
+          <div class="progress-bar-fill" style="width: ${task.progress}%"></div>
+        </div>
+      ` : '';
+
+      const uploadStageHTML = isUploading ? `
+        <div class="download-stats" style="color: #f59e0b; font-weight: 500;">
+          <span>☁️ Upload: <strong>${task.uploadProgress || 0}%</strong></span>
+          <span>Uploaded: ${formatBytes(task.uploadLoaded || 0)} / ${formatBytes(task.uploadTotal || 0)}</span>
+          <span>Upload Speed: ⚡ <strong>${formatBytes(task.uploadSpeed || 0)}/s</strong></span>
+        </div>
+        <div class="progress-bar-bg" style="margin-top: 10px;">
+          <div class="progress-bar-fill uploading" style="width: ${task.uploadProgress || 0}%"></div>
+        </div>
+      ` : '';
+
+      return `
+        <div class="download-item-card">
+          <div class="download-item-header">
+            <span class="filename-title">${escapeHtml(task.filename)}</span>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              ${statusTag}
+              <button class="btn-cancel-task" onclick="cancelDownloadTask('${task.gid}')" title="Cancel Task">
+                ✕ Cancel
+              </button>
+            </div>
+          </div>
+          ${downloadStageHTML}
+          ${uploadStageHTML}
+          ${errorDetailsHTML}
+        </div>
+      `;
+    }).join('');
+
+    listEl.innerHTML = itemsHTML;
+  }
+}
+
+function renderQueueTasks(queueTasks) {
+  const queueContainer = document.getElementById('queueListContainer');
+  const queueEmpty = document.getElementById('queueEmptyState');
+  const badgeEl = document.getElementById('queueBadge');
+
+  if (!queueContainer || !queueEmpty) return;
+
+  if (badgeEl) badgeEl.textContent = `${queueTasks.length} Queued`;
+
+  if (!queueTasks || queueTasks.length === 0) {
+    queueContainer.innerHTML = '';
+    queueEmpty.classList.remove('hidden');
     return;
   }
 
-  emptyState.classList.add('hidden');
+  queueEmpty.classList.add('hidden');
 
-  const itemsHTML = activeTasks.map(task => {
-    const speed = task.downloadSpeed ? `${formatBytes(task.downloadSpeed)}/s` : '0 B/s';
-    const downloadedStr = formatBytes(task.completedLength || 0);
-    const totalStr = formatBytes(task.totalLength || 0);
-    const isUploading = task.status === 'UPLOADING';
-    const isFailed = task.status === 'UPLOAD_FAILED' || task.status === 'error';
+  queueContainer.innerHTML = queueTasks.map(task => {
+    const isPaused = task.status === 'paused';
+    const statusBadge = isPaused
+      ? `<span class="status-badge dead">PAUSED</span>`
+      : `<span class="status-badge live" style="background: rgba(0, 122, 255, 0.15); color: var(--color-electric-blue); border-color: rgba(0, 122, 255, 0.3);"><span class="dot-pulse" style="background: var(--color-electric-blue);"></span> QUEUED</span>`;
 
-    let statusTag = `<span class="tech-tag">${task.status.toUpperCase()}</span>`;
-    if (isUploading) {
-      statusTag = `<span class="tech-tag" style="background: rgba(245,158,11,0.2); color: #f59e0b;">UPLOADING TO GOFILE...</span>`;
-    } else if (isFailed) {
-      statusTag = `<span class="tech-tag" style="background: rgba(239,68,68,0.2); color: #f87171;">FAILED</span>`;
-    }
-
-    const errorDetailsHTML = isFailed && task.errorMessage ? `
-      <div style="margin-top: 8px; font-size: 0.8rem; color: #f87171; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); padding: 6px 10px; border-radius: 6px;">
-        ⚠️ <strong>Error Mitigation Report:</strong> ${escapeHtml(task.errorMessage)}
-      </div>
-    ` : '';
-
-    // Stage 1: Downloading phase
-    const downloadStageHTML = !isUploading ? `
-      <div class="download-stats">
-        <span>Aria2 Download: <strong>${task.progress}%</strong></span>
-        <span>Downloaded: ${downloadedStr} / ${totalStr}</span>
-        <span>Speed: ⚡ <strong>${speed}</strong></span>
-      </div>
-      <div class="progress-bar-bg" style="margin-top: 10px;">
-        <div class="progress-bar-fill" style="width: ${task.progress}%"></div>
-      </div>
-    ` : '';
-
-    // Stage 2: Uploading phase
-    const uploadStageHTML = isUploading ? `
-      <div class="download-stats" style="color: #f59e0b; font-weight: 500;">
-        <span>☁️ GoFile Upload: <strong>${task.uploadProgress || 0}%</strong></span>
-        <span>Uploaded: ${formatBytes(task.uploadLoaded || 0)} / ${formatBytes(task.uploadTotal || 0)}</span>
-        <span>Upload Speed: ⚡ <strong>${formatBytes(task.uploadSpeed || 0)}/s</strong></span>
-      </div>
-      <div class="progress-bar-bg" style="margin-top: 10px;">
-        <div class="progress-bar-fill uploading" style="width: ${task.uploadProgress || 0}%"></div>
-      </div>
-    ` : '';
+    const pauseResumeBtn = isPaused
+      ? `<button class="btn-copy-mini" onclick="unpauseQueueTask('${task.gid}')" title="Resume task">▶️</button>`
+      : `<button class="btn-copy-mini" onclick="pauseQueueTask('${task.gid}')" title="Pause task">⏸️</button>`;
 
     return `
-      <div class="download-item-card">
-        <div class="download-item-header">
-          <span class="filename-title">${escapeHtml(task.filename)}</span>
-          <div style="display: flex; align-items: center; gap: 10px;">
-            ${statusTag}
-            <button class="btn-cancel-task" onclick="cancelDownloadTask('${task.gid}')" title="Cancel Download Task">
-              ✕ Cancel
-            </button>
+      <div class="queue-item-card">
+        <div class="queue-item-title" title="${escapeHtml(task.filename)}">${escapeHtml(task.filename)}</div>
+        <div class="queue-item-meta">
+          ${statusBadge}
+          <div style="display: flex; gap: 4px;">
+            ${pauseResumeBtn}
+            <button class="btn-copy-mini" onclick="cancelDownloadTask('${task.gid}')" title="Cancel/Remove task">❌</button>
           </div>
         </div>
-        ${downloadStageHTML}
-        ${uploadStageHTML}
-        ${errorDetailsHTML}
       </div>
     `;
   }).join('');
+}
 
-  listEl.innerHTML = itemsHTML;
+async function toggleQueuePause() {
+  const btn = document.getElementById('btnPauseResumeQueue');
+  try {
+    if (isQueuePaused) {
+      const res = await fetch('/api/queue/unpause-all', { method: 'POST' });
+      if (res.ok) {
+        isQueuePaused = false;
+        if (btn) btn.textContent = '⏸️ Pause Queue';
+        showToast('Queue resumed', 'success');
+      }
+    } else {
+      const res = await fetch('/api/queue/pause-all', { method: 'POST' });
+      if (res.ok) {
+        isQueuePaused = true;
+        if (btn) btn.textContent = '▶️ Resume Queue';
+        showToast('Queue paused', 'info');
+      }
+    }
+    fetchDownloads();
+  } catch (err) {
+    showToast('Failed to update queue state', 'error');
+  }
+}
+
+async function pauseQueueTask(gid) {
+  try {
+    await fetch(`/api/queue/${gid}/pause`, { method: 'POST' });
+    showToast('Task paused', 'info');
+    fetchDownloads();
+  } catch (e) {}
+}
+
+async function unpauseQueueTask(gid) {
+  try {
+    await fetch(`/api/queue/${gid}/unpause`, { method: 'POST' });
+    showToast('Task resumed', 'success');
+    fetchDownloads();
+  } catch (e) {}
 }
 
 async function cancelDownloadTask(gid) {
