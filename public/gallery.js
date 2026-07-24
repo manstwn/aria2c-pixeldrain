@@ -259,17 +259,18 @@ function renderGalleryPage() {
          </div>`
       : '';
 
-    // Cover HTML with background-image swapping for 100% zero-jitter slideshow
+    // Cover HTML with dual-layer crossfade for cinematic smooth frame transitions
     let coverHTML = '';
     if (thumbUrl) {
       coverHTML = `
         <div class="gallery-card-cover"
              id="coverDiv_${file.id}"
-             style="background-image: url('${escapeHtml(thumbUrl)}');"
              onmouseenter="startHoverSlideshow(event, '${file.id}')"
              onmouseleave="stopHoverSlideshow(event, '${file.id}')"
              onclick="openGalleryModal('${file.id}')"
              title="Hover to auto-preview frames • Click to open lightbox">
+          <div class="cover-layer layer-bg" id="layerBg_${file.id}" style="background-image: url('${escapeHtml(thumbUrl)}');"></div>
+          <div class="cover-layer layer-fg" id="layerFg_${file.id}" style="background-image: url('${escapeHtml(thumbUrl)}'); opacity: 0;"></div>
           <span class="cover-small-dot"></span>
           ${topBadgeHTML}
           ${frameDotsHTML}
@@ -334,7 +335,7 @@ function renderGalleryPage() {
   preloadAllThumbnails();
 }
 
-// Automatic Smooth Frame Slideshow on Hover with CSS Background Swapping & Frame Dots
+// Automatic Smooth Frame Slideshow on Hover with Dual-Layer Fade Crossfade & Frame Dots
 const hoverSlideshowIntervals = {};
 const preloadedCache = {};
 
@@ -358,14 +359,24 @@ function startHoverSlideshow(evt, fileId) {
   stopHoverSlideshow(evt, fileId);
 
   let frameIdx = 0;
-  const coverDiv = document.getElementById(`coverDiv_${fileId}`);
-  if (!coverDiv) return;
+  let activeLayer = 'bg';
 
   hoverSlideshowIntervals[fileId] = setInterval(() => {
     frameIdx = (frameIdx + 1) % file.thumbnails.length;
-    const targetDiv = document.getElementById(`coverDiv_${fileId}`);
-    if (targetDiv && file.thumbnails[frameIdx]) {
-      targetDiv.style.backgroundImage = `url("${file.thumbnails[frameIdx]}")`;
+    const nextUrl = file.thumbnails[frameIdx];
+    const layerBg = document.getElementById(`layerBg_${fileId}`);
+    const layerFg = document.getElementById(`layerFg_${fileId}`);
+
+    if (layerBg && layerFg && nextUrl) {
+      if (activeLayer === 'bg') {
+        layerFg.style.backgroundImage = `url("${nextUrl}")`;
+        layerFg.style.opacity = '1';
+        activeLayer = 'fg';
+      } else {
+        layerBg.style.backgroundImage = `url("${nextUrl}")`;
+        layerFg.style.opacity = '0';
+        activeLayer = 'bg';
+      }
     }
 
     // Light up active frame indicator dot
@@ -379,7 +390,7 @@ function startHoverSlideshow(evt, fileId) {
         }
       });
     }
-  }, 380);
+  }, 650);
 }
 
 function stopHoverSlideshow(evt, fileId) {
@@ -398,8 +409,12 @@ function stopHoverSlideshow(evt, fileId) {
   }
 
   const file = ledgerFiles.find(f => f.id === fileId);
-  if (coverDiv && file && file.thumbnails && file.thumbnails.length > 0) {
-    coverDiv.style.backgroundImage = `url("${file.thumbnails[0]}")`;
+  const layerBg = document.getElementById(`layerBg_${fileId}`);
+  const layerFg = document.getElementById(`layerFg_${fileId}`);
+
+  if (file && file.thumbnails && file.thumbnails.length > 0) {
+    if (layerBg) layerBg.style.backgroundImage = `url("${file.thumbnails[0]}")`;
+    if (layerFg) layerFg.style.opacity = '0';
   }
 
   // Reset frame dots to initial state (frame 0 active)

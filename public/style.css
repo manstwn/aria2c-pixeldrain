@@ -1552,9 +1552,6 @@ input:focus {
   width: 100%;
   aspect-ratio: 16/9;
   background-color: rgba(30, 41, 59, 0.8);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
   overflow: hidden;
   cursor: pointer;
   display: flex;
@@ -1562,6 +1559,27 @@ input:focus {
   justify-content: center;
   contain: layout paint;
   transition: border-color 0.2s ease;
+}
+
+.cover-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transition: opacity 0.35s ease-in-out;
+  pointer-events: none;
+}
+
+.cover-layer.layer-bg {
+  z-index: 0;
+}
+
+.cover-layer.layer-fg {
+  z-index: 1;
 }
 
 .gallery-card-cover * {
