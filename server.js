@@ -61,31 +61,31 @@ app.post('/api/logout', (req, res) => {
 let _cachedFolderSize = 0;
 let _folderSizeLastCalc = 0;
 
-function getFolderSize(dirPath) {
-  const now = Date.now();
-  // Recalculate at most once every 10 seconds
-  if (now - _folderSizeLastCalc < 10000) return _cachedFolderSize;
-
+function walkFolderSize(dirPath) {
   let totalBytes = 0;
   if (!fs.existsSync(dirPath)) return 0;
-
   try {
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
     for (const entry of entries) {
       const fullPath = path.join(dirPath, entry.name);
       if (entry.isFile()) {
-        const stats = fs.statSync(fullPath);
-        totalBytes += stats.size;
+        totalBytes += fs.statSync(fullPath).size;
       } else if (entry.isDirectory()) {
-        totalBytes += getFolderSize(fullPath);
+        totalBytes += walkFolderSize(fullPath);
       }
     }
   } catch (e) {}
-
-  _cachedFolderSize = totalBytes;
-  _folderSizeLastCalc = now;
   return totalBytes;
 }
+
+function getFolderSize(dirPath) {
+  const now = Date.now();
+  if (now - _folderSizeLastCalc < 10000) return _cachedFolderSize;
+  _cachedFolderSize = walkFolderSize(dirPath);
+  _folderSizeLastCalc = now;
+  return _cachedFolderSize;
+}
+
 
 function formatBytes(bytes) {
   if (bytes === 0) return '0 MB';
