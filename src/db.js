@@ -74,6 +74,9 @@ function generateId() {
 function addFile(record) {
   const files = getAllFiles();
   const now = new Date().toISOString();
+  const thumbs = record.thumbnails || [];
+  const defaultThumb = thumbs.length > 0 ? thumbs[0] : '';
+
   const newRecord = {
     id: record.id || generateId(),
     filename: record.filename || record.original_filename || 'unknown_file',
@@ -87,7 +90,8 @@ function addFile(record) {
     last_touched: record.last_touched || now,
     status: record.status || 'LIVE',
     metadata: record.metadata || null,
-    thumbnails: record.thumbnails || []
+    thumbnails: thumbs,
+    selected_thumbnail: record.selected_thumbnail || defaultThumb
   };
 
   files.unshift(newRecord);
@@ -106,6 +110,10 @@ function updateFile(id, updates) {
   };
   saveAllFiles(files);
   return files[index];
+}
+
+function setFileThumbnail(id, thumbnailUrl) {
+  return updateFile(id, { selected_thumbnail: thumbnailUrl });
 }
 
 function deleteFile(id) {
@@ -190,6 +198,7 @@ module.exports = {
   getFileById,
   addFile,
   updateFile,
+  setFileThumbnail,
   deleteFile,
   getAllQueue,
   addToQueue,

@@ -323,7 +323,12 @@
           <h3 id="galleryModalTitle" class="gallery-modal-title">Screenshot Frame Gallery</h3>
           <span id="galleryModalSub" class="gallery-modal-counter">Frame 1 of 15</span>
         </div>
-        <button class="icon-btn-minimal" onclick="closeGalleryModal()" title="Close (ESC)">✕</button>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button id="btnSetThumbnail" class="btn-table-action" onclick="setAsCoverThumbnail()" title="Set current frame as default cover thumbnail">
+            📌 Set as Cover
+          </button>
+          <button class="icon-btn-minimal" onclick="closeGalleryModal()" title="Close (ESC)">✕</button>
+        </div>
       </div>
 
       <!-- Main Stage Preview -->

@@ -237,6 +237,21 @@ app.patch('/api/files/:id', auth.requireAuth, (req, res) => {
   }
 });
 
+app.patch('/api/files/:id/thumbnail', auth.requireAuth, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { thumbnail } = req.body;
+    if (!thumbnail) {
+      return res.status(400).json({ error: 'thumbnail parameter is required' });
+    }
+    const updated = db.setFileThumbnail(id, thumbnail);
+    if (!updated) return res.status(404).json({ error: 'File record not found' });
+    res.json({ success: true, file: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/files/:id/touch', auth.requireAuth, async (req, res) => {
   try {
     const { id } = req.params;

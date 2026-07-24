@@ -636,7 +636,7 @@ function renderLedger() {
         ? `<div class="original-name-row" title="Original Download Filename">📁 Original: ${escapeHtml(originalName)}</div>`
         : '';
 
-      const thumbUrl = (file.thumbnails && file.thumbnails.length > 0) ? file.thumbnails[0] : null;
+      const thumbUrl = file.selected_thumbnail || ((file.thumbnails && file.thumbnails.length > 0) ? file.thumbnails[0] : null);
       const previewCellHTML = thumbUrl
         ? `<div class="table-thumb-box" onclick="openGalleryModal('${file.id}')" title="Click to view screenshot gallery">
              <img src="${escapeHtml(thumbUrl)}" alt="Thumbnail Preview" />
@@ -1058,6 +1058,7 @@ async function saveCustomName(el) {
    GALLERY LIGHTBOX MODAL HANDLERS
    ========================================================================== */
 
+let activeGalleryFileId = null;
 let activeGalleryImages = [];
 let currentGalleryIndex = 0;
 
@@ -1068,8 +1069,11 @@ function openGalleryModal(id) {
     return;
   }
 
+  activeGalleryFileId = id;
   activeGalleryImages = file.thumbnails;
-  currentGalleryIndex = 0;
+
+  const selectedIdx = file.thumbnails.indexOf(file.selected_thumbnail);
+  currentGalleryIndex = selectedIdx !== -1 ? selectedIdx : 0;
 
   const displayName = file.custom_name || file.filename;
   document.getElementById('galleryModalTitle').textContent = `${displayName} — Screenshot Gallery`;
@@ -1082,8 +1086,27 @@ function renderGalleryState() {
   if (!activeGalleryImages || activeGalleryImages.length === 0) return;
 
   const total = activeGalleryImages.length;
+  const currentUrl = activeGalleryImages[currentGalleryIndex];
+
   document.getElementById('galleryModalSub').textContent = `Frame ${currentGalleryIndex + 1} of ${total}`;
-  document.getElementById('galleryMainImage').src = activeGalleryImages[currentGalleryIndex];
+  document.getElementById('galleryMainImage').src = currentUrl;
+
+  const activeFile = ledgerFiles.find(f => f.id === activeGalleryFileId);
+  const btnSet = document.getElementById('btnSetThumbnail');
+  if (btnSet && activeFile) {
+    const isSelected = activeFile.selected_thumbnail === currentUrl;
+    if (isSelected) {
+      btnSet.innerHTML = '⭐ Primary Cover';
+      btnSet.style.background = 'rgba(16, 185, 129, 0.25)';
+      btnSet.style.borderColor = 'rgba(16, 185, 129, 0.5)';
+      btnSet.style.color = '#34d399';
+    } else {
+      btnSet.innerHTML = '📌 Set as Cover';
+      btnSet.style.background = '';
+      btnSet.style.borderColor = '';
+      btnSet.style.color = '';
+    }
+  }
 
   const strip = document.getElementById('galleryThumbStrip');
   strip.innerHTML = activeGalleryImages.map((tUrl, idx) => `
@@ -1091,6 +1114,33 @@ function renderGalleryState() {
       <img src="${tUrl}" alt="Thumb ${idx + 1}" />
     </div>
   `).join('');
+}
+
+async function setAsCoverThumbnail() {
+  if (!activeGalleryFileId || !activeGalleryImages[currentGalleryIndex]) return;
+
+  const currentUrl = activeGalleryImages[currentGalleryIndex];
+  const file = ledgerFiles.find(f => f.id === activeGalleryFileId);
+  if (!file) return;
+
+  try {
+    const res = await fetch(`/api/files/${activeGalleryFileId}/thumbnail`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thumbnail: currentUrl })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      file.selected_thumbnail = currentUrl;
+      showToast('⭐ Primary cover thumbnail updated!', 'success');
+      renderGalleryState();
+      renderLedger();
+    } else {
+      showToast(data.error || 'Failed to update thumbnail', 'error');
+    }
+  } catch (err) {
+    showToast('Network error updating cover thumbnail', 'error');
+  }
 }
 
 function setGalleryIndex(index) {
