@@ -231,6 +231,28 @@ async function getDownloadsStatus() {
       };
     });
 
+    const aria2Gids = new Set(allTasks.map(t => t.gid));
+    const queuedItems = db.getAllQueue();
+
+    for (const qItem of queuedItems) {
+      if (!qItem.gid || !aria2Gids.has(qItem.gid)) {
+        formattedTasks.push({
+          gid: qItem.id || qItem.gid,
+          filename: qItem.filename || qItem.custom_name || (qItem.url ? path.basename(qItem.url.split('?')[0]) : 'Queued Item'),
+          status: qItem.status || 'QUEUED',
+          progress: 0,
+          downloadSpeed: 0,
+          completedLength: 0,
+          totalLength: 0,
+          uploadProgress: 0,
+          uploadLoaded: 0,
+          uploadTotal: 0,
+          uploadSpeed: 0,
+          errorMessage: ''
+        });
+      }
+    }
+
     return formattedTasks;
   } catch (err) {
     if (!rpcErrorLogged) {
@@ -435,11 +457,13 @@ async function removeDownload(gid) {
     // Clean up local download file and .aria2 control file
     await cleanUpTaskFiles(gid, task);
 
+    db.removeFromQueue(gid);
     activeUploads.delete(gid);
     processedGids.add(gid);
     console.log(`[Aria2] Download task GID ${gid} cancelled and local files deleted.`);
     return true;
   } catch (err) {
+    db.removeFromQueue(gid);
     console.error(`[Aria2] Failed to remove download task GID ${gid}:`, err.message);
     throw err;
   }
