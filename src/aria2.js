@@ -316,6 +316,7 @@ async function pollCompletedDownloads() {
         }, sourceUrl)
           .then(record => {
             activeUploads.set(task.gid, { filename, status: 'UPLOADED', record, uploadProgress: 100 });
+            db.removeFromQueue(task.gid);
             setTimeout(() => {
               activeUploads.delete(task.gid);
               try { rpcCall('aria2.removeDownloadResult', [task.gid]); } catch (e) {}

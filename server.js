@@ -104,7 +104,27 @@ app.get('/api/downloads', auth.requireAuth, async (req, res) => {
   try {
     const status = await aria2.getDownloadsStatus();
     const conn = await aria2.checkConnection();
-    res.json({ aria2Connection: conn, downloads: status });
+    const persistentQueue = db.getAllQueue();
+
+    // Merge persistent queue items from data/queue.json so nothing is lost on page refresh
+    const mergedDownloads = [...status];
+    persistentQueue.forEach(qItem => {
+      const existsInAria2 = status.some(s => (qItem.gid && s.gid === qItem.gid) || s.filename === qItem.filename);
+      if (!existsInAria2) {
+        mergedDownloads.push({
+          gid: qItem.gid || qItem.id,
+          filename: qItem.filename || qItem.custom_name || 'Queued Item',
+          status: qItem.status === 'PAUSED' ? 'paused' : 'waiting',
+          progress: 0,
+          downloadSpeed: 0,
+          completedLength: 0,
+          totalLength: 0,
+          errorMessage: ''
+        });
+      }
+    });
+
+    res.json({ aria2Connection: conn, downloads: mergedDownloads });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -126,8 +146,14 @@ app.post('/api/downloads', auth.requireAuth, async (req, res) => {
     }
 
     const chosenName = filename || customFilename || '';
+    const queueRecord = db.addToQueue({ url, custom_name: chosenName, status: 'QUEUED' });
+
     const gid = await aria2.addDownload(url, chosenName);
-    res.json({ success: true, gid, message: 'Download task submitted successfully with 16 connections enforced.' });
+    if (gid) {
+      db.updateQueueItem(queueRecord.id, { gid });
+    }
+
+    res.json({ success: true, gid, queueId: queueRecord.id, message: 'Download task submitted successfully with 16 connections enforced.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -137,6 +163,7 @@ app.delete('/api/downloads/:gid', auth.requireAuth, async (req, res) => {
   try {
     const { gid } = req.params;
     await aria2.removeDownload(gid);
+    db.removeFromQueue(gid);
     res.json({ success: true, message: 'Download task cancelled.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -164,19 +191,25 @@ app.post('/api/queue/unpause-all', auth.requireAuth, async (req, res) => {
 
 app.post('/api/queue/:gid/pause', auth.requireAuth, async (req, res) => {
   try {
-    await aria2.pauseTask(req.params.gid);
+    const { gid } = req.params;
+    await aria2.pauseTask(gid);
+    db.updateQueueItem(gid, { status: 'PAUSED' });
     res.json({ success: true, message: 'Task paused.' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    db.updateQueueItem(req.params.gid, { status: 'PAUSED' });
+    res.json({ success: true, message: 'Task marked paused.' });
   }
 });
 
 app.post('/api/queue/:gid/unpause', auth.requireAuth, async (req, res) => {
   try {
-    await aria2.unpauseTask(req.params.gid);
+    const { gid } = req.params;
+    await aria2.unpauseTask(gid);
+    db.updateQueueItem(gid, { status: 'QUEUED' });
     res.json({ success: true, message: 'Task resumed.' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    db.updateQueueItem(req.params.gid, { status: 'QUEUED' });
+    res.json({ success: true, message: 'Task marked resumed.' });
   }
 });
 

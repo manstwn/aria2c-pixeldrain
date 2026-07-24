@@ -17,6 +17,10 @@ function initStorage() {
   if (!fs.existsSync(FILES_JSON_PATH)) {
     fs.writeFileSync(FILES_JSON_PATH, JSON.stringify([], null, 2), 'utf8');
   }
+  const queuePath = path.join(DATA_DIR, 'queue.json');
+  if (!fs.existsSync(queuePath)) {
+    fs.writeFileSync(queuePath, JSON.stringify([], null, 2), 'utf8');
+  }
 }
 
 const metadataModule = require('./metadata');
@@ -116,14 +120,80 @@ function deleteFile(id) {
 
 initStorage();
 
+const QUEUE_JSON_PATH = path.join(DATA_DIR, 'queue.json');
+
+function getAllQueue() {
+  initStorage();
+  try {
+    const data = fs.readFileSync(QUEUE_JSON_PATH, 'utf8');
+    return JSON.parse(data || '[]');
+  } catch (err) {
+    console.error('Error reading queue.json:', err);
+    return [];
+  }
+}
+
+function saveAllQueue(queueItems) {
+  initStorage();
+  fs.writeFileSync(QUEUE_JSON_PATH, JSON.stringify(queueItems, null, 2), 'utf8');
+}
+
+function addToQueue(item) {
+  const queue = getAllQueue();
+  const now = new Date().toISOString();
+  const id = `q_${Date.now()}_${Math.floor(100 + Math.random() * 900)}`;
+  const newItem = {
+    id,
+    gid: item.gid || '',
+    url: item.url || '',
+    custom_name: item.custom_name || '',
+    filename: item.filename || item.custom_name || (item.url ? path.basename(item.url.split('?')[0]) : 'Queued Item'),
+    status: item.status || 'QUEUED',
+    created_at: now
+  };
+  queue.push(newItem);
+  saveAllQueue(queue);
+  return newItem;
+}
+
+function updateQueueItem(idOrGid, updates) {
+  const queue = getAllQueue();
+  const index = queue.findIndex(q => q.id === idOrGid || (q.gid && q.gid === idOrGid));
+  if (index === -1) return null;
+  queue[index] = { ...queue[index], ...updates };
+  saveAllQueue(queue);
+  return queue[index];
+}
+
+function removeFromQueue(idOrGid) {
+  const queue = getAllQueue();
+  const filtered = queue.filter(q => q.id !== idOrGid && (q.gid ? q.gid !== idOrGid : true));
+  if (filtered.length !== queue.length) {
+    saveAllQueue(filtered);
+    return true;
+  }
+  return false;
+}
+
+function clearQueue() {
+  saveAllQueue([]);
+  return true;
+}
+
 module.exports = {
   DATA_DIR,
   DOWNLOADS_DIR,
   FILES_JSON_PATH,
+  QUEUE_JSON_PATH,
   generateId,
   getAllFiles,
   getFileById,
   addFile,
   updateFile,
-  deleteFile
+  deleteFile,
+  getAllQueue,
+  addToQueue,
+  updateQueueItem,
+  removeFromQueue,
+  clearQueue
 };
