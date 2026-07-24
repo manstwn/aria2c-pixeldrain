@@ -270,8 +270,7 @@ function renderGalleryPage() {
              id="coverDiv_${file.id}"
              onmouseenter="startHoverSlideshow(event, '${file.id}')"
              onmouseleave="stopHoverSlideshow(event, '${file.id}')"
-             onclick="openGalleryModal('${file.id}')"
-             title="Hover to auto-preview frames • Click to open lightbox">
+             onclick="openGalleryModal('${file.id}')">
           <div class="cover-layer layer-bg" id="layerBg_${file.id}" style="background-image: url('${escapeHtml(thumbUrl)}');"></div>
           <div class="cover-layer layer-fg" id="layerFg_${file.id}" style="background-image: url('${escapeHtml(thumbUrl)}'); opacity: 0;"></div>
           <span class="cover-small-dot"></span>
