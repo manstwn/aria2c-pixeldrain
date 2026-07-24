@@ -58,6 +58,34 @@ app.post('/api/logout', (req, res) => {
   res.json({ success: true, message: 'Logged out' });
 });
 
+function getFolderSize(dirPath) {
+  let totalBytes = 0;
+  if (!fs.existsSync(dirPath)) return 0;
+
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+      if (entry.isFile()) {
+        const stats = fs.statSync(fullPath);
+        totalBytes += stats.size;
+      } else if (entry.isDirectory()) {
+        totalBytes += getFolderSize(fullPath);
+      }
+    }
+  } catch (e) {}
+
+  return totalBytes;
+}
+
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 MB';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
 /* ==========================================================================
    REAL-TIME SERVER-SENT EVENTS (SSE) STREAMING
    ========================================================================== */
@@ -80,7 +108,10 @@ app.get('/api/stream', (req, res) => {
       const downloads = await aria2.getDownloadsStatus();
       const conn = await aria2.checkConnection();
       const files = db.getAllFiles();
-      res.write(`data: ${JSON.stringify({ downloads, conn, files })}\n\n`);
+      const dataSizeBytes = getFolderSize(path.join(__dirname, 'data'));
+      const dataSizeFormatted = formatBytes(dataSizeBytes);
+
+      res.write(`data: ${JSON.stringify({ downloads, conn, files, dataSizeFormatted, dataSizeBytes })}\n\n`);
     } catch (err) {}
   };
 

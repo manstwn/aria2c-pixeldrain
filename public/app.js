@@ -76,6 +76,11 @@ function connectSSE() {
         }
       }
 
+      if (data.dataSizeFormatted) {
+        const storageText = document.getElementById('storageText');
+        if (storageText) storageText.textContent = `Data: ${data.dataSizeFormatted}`;
+      }
+
       if (data.downloads) {
         renderActiveDownloads(data.downloads);
       }

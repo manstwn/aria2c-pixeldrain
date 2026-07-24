@@ -137,6 +137,11 @@ function connectSSE() {
           }
         }
       }
+
+      if (data.dataSizeFormatted) {
+        const storageText = document.getElementById('storageText');
+        if (storageText) storageText.textContent = `Data: ${data.dataSizeFormatted}`;
+      }
       // Intentionally DO NOT call renderGalleryPage() from SSE on gallery page
       // to keep DOM 100% static and prevent background re-render jitter!
     } catch (e) {
