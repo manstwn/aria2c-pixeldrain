@@ -182,6 +182,8 @@ function changeGridColumns(cols) {
   localStorage.setItem('gallery_grid_cols', cols);
 }
 
+let activeHoverFileId = null;
+
 function renderGalleryPage() {
   const container = document.getElementById('galleryGridContainer');
   const emptyState = document.getElementById('galleryEmptyState');
@@ -189,6 +191,9 @@ function renderGalleryPage() {
   const sortSelect = document.getElementById('gallerySortSelect');
 
   if (!container) return;
+
+  // Prevent SSE refresh from wiping out active hover slideshow card
+  if (activeHoverFileId) return;
 
   // Restore or set grid columns selection
   const gridSelect = document.getElementById('galleryGridColsSelect');
@@ -199,10 +204,6 @@ function renderGalleryPage() {
   // Update Summary Counters
   const totalMediaEl = document.getElementById('statTotalMedia');
   if (totalMediaEl) totalMediaEl.textContent = ledgerFiles.length;
-
-  const count15Frame = ledgerFiles.filter(f => f.thumbnails && f.thumbnails.length > 0).length;
-  const count15El = document.getElementById('stat15FrameVideos');
-  if (count15El) count15El.textContent = count15Frame;
 
   const search = (searchInput ? searchInput.value : '').toLowerCase().trim();
   const sortVal = sortSelect ? sortSelect.value : 'newest';
@@ -254,6 +255,13 @@ function renderGalleryPage() {
       ? `<span class="gallery-cover-badge">⏱️ ${escapeHtml(durationText)}</span>`
       : (cat === 'video' ? `<span class="gallery-cover-badge">🎬 Video</span>` : '');
 
+    // Bottom Frame Lighting Dots
+    const frameDotsHTML = (thumbs.length > 1)
+      ? `<div class="cover-frame-dots" id="dots_${file.id}">
+           ${thumbs.map((_, idx) => `<span class="frame-dot ${idx === 0 ? 'active' : ''}"></span>`).join('')}
+         </div>`
+      : '';
+
     // Cover HTML with background-image swapping for 100% zero-jitter slideshow
     let coverHTML = '';
     if (thumbUrl) {
@@ -267,6 +275,7 @@ function renderGalleryPage() {
              title="Hover to auto-preview frames • Click to open lightbox">
           <span class="cover-small-dot"></span>
           ${topBadgeHTML}
+          ${frameDotsHTML}
         </div>
       `;
     } else {
@@ -325,10 +334,11 @@ function renderGalleryPage() {
   }).join('');
 }
 
-// Automatic Smooth Frame Slideshow on Hover with CSS Background Swapping & Zero Jitter
+// Automatic Smooth Frame Slideshow on Hover with CSS Background Swapping & Frame Dots
 const hoverSlideshowIntervals = {};
 
 function startHoverSlideshow(element, fileId) {
+  activeHoverFileId = fileId;
   const file = ledgerFiles.find(f => f.id === fileId);
   if (!file || !file.thumbnails || file.thumbnails.length <= 1) return;
 
@@ -344,10 +354,26 @@ function startHoverSlideshow(element, fileId) {
     if (targetDiv && file.thumbnails[frameIdx]) {
       targetDiv.style.backgroundImage = `url("${file.thumbnails[frameIdx]}")`;
     }
+
+    // Light up active frame indicator dot
+    const dotsContainer = document.getElementById(`dots_${fileId}`);
+    if (dotsContainer && dotsContainer.children.length > 0) {
+      Array.from(dotsContainer.children).forEach((dot, idx) => {
+        if (idx === frameIdx) {
+          dot.classList.add('active');
+        } else {
+          dot.classList.remove('active');
+        }
+      });
+    }
   }, 380);
 }
 
 function stopHoverSlideshow(element, fileId) {
+  if (activeHoverFileId === fileId) {
+    activeHoverFileId = null;
+  }
+
   if (hoverSlideshowIntervals[fileId]) {
     clearInterval(hoverSlideshowIntervals[fileId]);
     delete hoverSlideshowIntervals[fileId];
@@ -357,6 +383,18 @@ function stopHoverSlideshow(element, fileId) {
   const coverDiv = document.getElementById(`coverDiv_${fileId}`);
   if (coverDiv && file && file.thumbnails && file.thumbnails.length > 0) {
     coverDiv.style.backgroundImage = `url("${file.thumbnails[0]}")`;
+  }
+
+  // Reset frame dots to initial state (frame 0 active)
+  const dotsContainer = document.getElementById(`dots_${fileId}`);
+  if (dotsContainer && dotsContainer.children.length > 0) {
+    Array.from(dotsContainer.children).forEach((dot, idx) => {
+      if (idx === 0) {
+        dot.classList.add('active');
+      } else {
+        dot.classList.remove('active');
+      }
+    });
   }
 }
 

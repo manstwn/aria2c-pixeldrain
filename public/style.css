@@ -1577,6 +1577,40 @@ input:focus {
   z-index: 2;
 }
 
+/* Bottom Frame Indicator Dots Lighting Bar */
+.cover-frame-dots {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-full);
+  pointer-events: none;
+  z-index: 2;
+  max-width: 90%;
+  overflow: hidden;
+}
+
+.frame-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  transition: all 0.2s ease;
+}
+
+.frame-dot.active {
+  background: var(--color-electric-blue);
+  box-shadow: 0 0 8px rgba(0, 122, 255, 0.9);
+  transform: scale(1.35);
+}
+
 .gallery-cover-badge {
   position: absolute;
   top: 8px;
