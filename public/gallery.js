@@ -5,8 +5,6 @@
 let currentPin = '';
 let ledgerFiles = [];
 let galleryCategoryFilter = 'ALL';
-let activeGalleryImages = [];
-let currentGalleryIndex = 0;
 
 document.addEventListener('DOMContentLoaded', () => {
   checkAuth();
