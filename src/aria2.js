@@ -438,6 +438,17 @@ function startMonitor() {
  */
 async function removeDownload(gid) {
   if (!gid) throw new Error('Valid GID is required.');
+
+  // If this is a persistent queue-only ID (not yet submitted to Aria2 RPC),
+  // just delete it from queue.json directly without touching Aria2 at all.
+  if (typeof gid === 'string' && gid.startsWith('q_')) {
+    const removed = db.removeFromQueue(gid);
+    if (removed) {
+      console.log(`[Queue Engine] Queued item ${gid} removed from queue before starting.`);
+    }
+    return true;
+  }
+
   try {
     let task = null;
     try {
@@ -450,7 +461,7 @@ async function removeDownload(gid) {
       try {
         await rpcCall('aria2.forceRemove', [gid]);
       } catch (e2) {
-        await rpcCall('aria2.removeDownloadResult', [gid]);
+        try { await rpcCall('aria2.removeDownloadResult', [gid]); } catch (e3) {}
       }
     }
 
