@@ -25,8 +25,10 @@ async function touchFileRecord(file) {
   const targetBytes = fileSize > 0 ? Math.ceil(fileSize * 0.12) : 1024;
   const rangeHeader = fileSize > 0 ? `bytes=0-${targetBytes}` : 'bytes=0-1024';
   const targetUrl = `https://pixeldrain.com/api/file/${file.pixeldrain_id}`;
+  const sourceUrl = file.source_url || (file.metadata && file.metadata.source_url) || '';
+  const sourceInfo = sourceUrl ? ` | Source URL: ${sourceUrl}` : '';
 
-  console.log(`[TouchManager] Pinging & 12% chunk-downloading (${Math.round(targetBytes / 1024)} KB) for ${file.filename} | RAW URL: ${targetUrl}...`);
+  console.log(`[TouchManager] Pinging & 12% chunk-downloading (${Math.round(targetBytes / 1024)} KB) for ${file.filename}${sourceInfo} | RAW URL: ${targetUrl}`);
 
   try {
     const response = await axios.get(targetUrl, {
@@ -52,21 +54,21 @@ async function touchFileRecord(file) {
         last_touched: new Date().toISOString(),
         status: 'LIVE'
       });
-      console.log(`[TouchManager] ✅ Touch successful (12% downloaded) for ${file.filename} | RAW URL: ${targetUrl}`);
+      console.log(`[TouchManager] ✅ Touch successful (12% downloaded) for ${file.filename}${sourceInfo} | RAW URL: ${targetUrl}`);
       return { success: true, status: 'LIVE', file: updated };
 
     } else if (isNotFound) {
       const updated = db.updateFile(file.id, { status: 'DEAD' });
-      console.warn(`[TouchManager] ❌ Touch FAILED (404) for ${file.filename} | RAW URL: ${targetUrl}. Marked DEAD.`);
+      console.warn(`[TouchManager] ❌ Touch FAILED (404) for ${file.filename}${sourceInfo} | RAW URL: ${targetUrl}. Marked DEAD.`);
       return { success: false, status: 'DEAD', file: updated };
 
     } else {
-      console.warn(`[TouchManager] Received HTTP ${response.status} for ${file.filename} | RAW URL: ${targetUrl}. Leaving status untouched.`);
+      console.warn(`[TouchManager] Received HTTP ${response.status} for ${file.filename}${sourceInfo} | RAW URL: ${targetUrl}. Leaving status untouched.`);
       return { success: false, status: file.status, file };
     }
 
   } catch (err) {
-    console.warn(`[TouchManager Warning] Chunk-download error for ${file.filename} (${targetUrl}): ${err.message}`);
+    console.warn(`[TouchManager Warning] Chunk-download error for ${file.filename}${sourceInfo} (${targetUrl}): ${err.message}`);
     return { success: false, status: file.status, file };
   }
 }
