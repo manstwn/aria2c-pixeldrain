@@ -203,7 +203,8 @@ async function handleDownloadSubmit(e) {
 
     const data = await res.json();
     if (res.ok && data.success) {
-      showToast('Download task started (16 connections enforced)', 'success');
+      const msg = data.message || 'Added to queue';
+      showToast(`📥 ${msg}`, 'success');
       inputUrl.value = '';
       if (inputName) inputName.value = '';
       fetchDownloads();

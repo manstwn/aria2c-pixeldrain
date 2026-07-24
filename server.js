@@ -181,9 +181,11 @@ app.post('/api/downloads', auth.requireAuth, async (req, res) => {
 
     // Trigger Strict Serial Queue Engine: will launch immediately if pipeline is free,
     // or keep QUEUED if another task is currently downloading or uploading!
-    aria2.processNextQueueItem();
+    setTimeout(() => aria2.processNextQueueItem(), 300);
 
-    res.json({ success: true, queueId: queueRecord.id, message: 'Download task added to queue.' });
+    const queue = db.getAllQueue();
+    const position = queue.findIndex(q => q.id === queueRecord.id) + 1;
+    res.json({ success: true, queued: true, queueId: queueRecord.id, queuePosition: position, message: position === 1 ? 'Download started!' : `Added to queue (position ${position})` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -338,4 +340,15 @@ app.listen(PORT, '0.0.0.0', () => {
   // Initialize Background Daemon Monitors
   aria2.startMonitor();
   touchManager.initScheduler();
+
+  // On startup: reset any stuck DOWNLOADING queue items back to QUEUED
+  // (happens if server crashed mid-download) and kick off the queue engine
+  const queue = db.getAllQueue();
+  const stuckItems = queue.filter(q => q.status === 'DOWNLOADING');
+  if (stuckItems.length > 0) {
+    console.log(`[Queue Engine] Resetting ${stuckItems.length} stuck DOWNLOADING item(s) back to QUEUED on startup...`);
+    stuckItems.forEach(item => db.updateQueueItem(item.id, { status: 'QUEUED', gid: '' }));
+  }
+  // Kick off queue engine after a short delay (let aria2 daemon connect first)
+  setTimeout(() => aria2.processNextQueueItem(), 3000);
 });
