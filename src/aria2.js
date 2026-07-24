@@ -292,7 +292,8 @@ async function pollCompletedDownloads() {
         }
 
         const filename = path.basename(filePath);
-        const sourceUrl = taskSourceUrls.get(task.gid) || '';
+        const sourceData = taskSourceUrls.get(task.gid);
+        const sourceUrlStr = typeof sourceData === 'string' ? sourceData : (sourceData && sourceData.url ? sourceData.url : '');
         console.log(`[Aria2] Task ${task.gid} completed downloading (${filename}). Triggering Pixeldrain upload...`);
 
         activeUploads.set(task.gid, {
@@ -313,7 +314,7 @@ async function pollCompletedDownloads() {
             ...progressData,
             status: 'UPLOADING'
           });
-        }, sourceUrl)
+        }, sourceUrlStr)
           .then(record => {
             activeUploads.set(task.gid, { filename, status: 'UPLOADED', record, uploadProgress: 100 });
             db.removeFromQueue(task.gid);

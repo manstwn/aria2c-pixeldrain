@@ -9,6 +9,16 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function extractSourceUrl(file) {
+  if (!file) return '';
+  let raw = file.source_url || (file.metadata && file.metadata.source_url) || '';
+  if (typeof raw === 'string') return raw;
+  if (raw && typeof raw === 'object') {
+    return raw.url || raw.source_url || '';
+  }
+  return '';
+}
+
 /**
  * Perform 1 KB Micro-Download & Abort on a single Pixeldrain record.
  * @param {object} file File record object from database
@@ -25,7 +35,7 @@ async function touchFileRecord(file) {
   const targetBytes = fileSize > 0 ? Math.ceil(fileSize * 0.12) : 1024;
   const rangeHeader = fileSize > 0 ? `bytes=0-${targetBytes}` : 'bytes=0-1024';
   const targetUrl = `https://pixeldrain.com/api/file/${file.pixeldrain_id}`;
-  const sourceUrl = file.source_url || (file.metadata && file.metadata.source_url) || '';
+  const sourceUrl = extractSourceUrl(file);
   const sourceInfo = sourceUrl ? ` | Source URL: ${sourceUrl}` : '';
 
   console.log(`[TouchManager] Pinging & 12% chunk-downloading (${Math.round(targetBytes / 1024)} KB) for ${file.filename}${sourceInfo} | RAW URL: ${targetUrl}`);
