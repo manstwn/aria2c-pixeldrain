@@ -266,8 +266,8 @@ function renderGalleryPage() {
         <div class="gallery-card-cover"
              id="coverDiv_${file.id}"
              style="background-image: url('${escapeHtml(thumbUrl)}');"
-             onmouseenter="startHoverSlideshow(this, '${file.id}')"
-             onmouseleave="stopHoverSlideshow(this, '${file.id}')"
+             onmouseenter="startHoverSlideshow(event, '${file.id}')"
+             onmouseleave="stopHoverSlideshow(event, '${file.id}')"
              onclick="openGalleryModal('${file.id}')"
              title="Hover to auto-preview frames • Click to open lightbox">
           <span class="cover-small-dot"></span>
@@ -329,17 +329,33 @@ function renderGalleryPage() {
       </div>
     `;
   }).join('');
+
+  // Preload all 15-frame thumbnail images into browser memory
+  preloadAllThumbnails();
 }
 
 // Automatic Smooth Frame Slideshow on Hover with CSS Background Swapping & Frame Dots
 const hoverSlideshowIntervals = {};
+const preloadedCache = {};
 
-function startHoverSlideshow(element, fileId) {
+function preloadAllThumbnails() {
+  ledgerFiles.forEach(file => {
+    if (file.thumbnails && Array.isArray(file.thumbnails) && !preloadedCache[file.id]) {
+      preloadedCache[file.id] = true;
+      file.thumbnails.forEach(url => {
+        const img = new Image();
+        img.src = url;
+      });
+    }
+  });
+}
+
+function startHoverSlideshow(evt, fileId) {
   activeHoverFileId = fileId;
   const file = ledgerFiles.find(f => f.id === fileId);
   if (!file || !file.thumbnails || file.thumbnails.length <= 1) return;
 
-  stopHoverSlideshow(element, fileId);
+  stopHoverSlideshow(evt, fileId);
 
   let frameIdx = 0;
   const coverDiv = document.getElementById(`coverDiv_${fileId}`);
@@ -366,7 +382,12 @@ function startHoverSlideshow(element, fileId) {
   }, 380);
 }
 
-function stopHoverSlideshow(element, fileId) {
+function stopHoverSlideshow(evt, fileId) {
+  const coverDiv = document.getElementById(`coverDiv_${fileId}`);
+  if (evt && evt.relatedTarget && coverDiv && coverDiv.contains(evt.relatedTarget)) {
+    return;
+  }
+
   if (activeHoverFileId === fileId) {
     activeHoverFileId = null;
   }
@@ -377,7 +398,6 @@ function stopHoverSlideshow(element, fileId) {
   }
 
   const file = ledgerFiles.find(f => f.id === fileId);
-  const coverDiv = document.getElementById(`coverDiv_${fileId}`);
   if (coverDiv && file && file.thumbnails && file.thumbnails.length > 0) {
     coverDiv.style.backgroundImage = `url("${file.thumbnails[0]}")`;
   }

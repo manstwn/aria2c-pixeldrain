@@ -1564,6 +1564,11 @@ input:focus {
   transition: border-color 0.2s ease;
 }
 
+.gallery-card-cover * {
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
 .cover-small-dot {
   position: absolute;
   top: 8px;
