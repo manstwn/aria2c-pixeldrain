@@ -276,7 +276,7 @@ function renderActiveDownloads(downloads) {
   if (!listEl || !emptyState) return;
 
   const activeDownloadingTasks = downloads.filter(t => t.status === 'active' || t.status === 'UPLOADING' || t.status === 'UPLOAD_FAILED' || t.status === 'error');
-  const queueTasks = downloads.filter(t => t.status === 'waiting' || t.status === 'paused' || t.status === 'QUEUED' || t.status === 'DOWNLOADING');
+  const queueTasks = downloads.filter(t => t.status === 'waiting' || t.status === 'paused' || t.status === 'PAUSED' || t.status === 'QUEUED' || t.status === 'DOWNLOADING');
 
   // Render Queue Column
   renderQueueTasks(queueTasks);
