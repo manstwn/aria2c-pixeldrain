@@ -543,6 +543,54 @@ async function unpauseTask(gid) {
   }
 }
 
+/**
+ * Force stop and purge all active, waiting, and stopped downloads from Aria2 daemon,
+ * then wipe local cache files from disk.
+ */
+async function wipeAllAria2Tasks() {
+  try {
+    // 1. Force purge active tasks
+    try {
+      const active = await rpcCall('aria2.tellActive') || [];
+      for (const task of active) {
+        try { await rpcCall('aria2.forceRemove', [task.gid]); } catch (e) {}
+      }
+    } catch (e) {}
+
+    // 2. Force purge waiting tasks
+    try {
+      const waiting = await rpcCall('aria2.tellWaiting', [0, 100]) || [];
+      for (const task of waiting) {
+        try { await rpcCall('aria2.forceRemove', [task.gid]); } catch (e) {}
+      }
+    } catch (e) {}
+
+    // 3. Purge stopped/completed results from aria2 memory
+    try {
+      await rpcCall('aria2.purgeDownloadResult');
+    } catch (e) {}
+
+    console.log('[Aria2] All active and waiting tasks purged from Aria2 RPC daemon.');
+  } catch (err) {
+    console.warn(`[Aria2] Error purging Aria2 tasks on startup: ${err.message}`);
+  }
+
+  // 4. Give aria2 a moment to release file handles, then delete all download files
+  const downloadsDir = path.resolve(db.DOWNLOADS_DIR);
+  if (fs.existsSync(downloadsDir)) {
+    try {
+      const files = fs.readdirSync(downloadsDir);
+      for (const file of files) {
+        const curPath = path.join(downloadsDir, file);
+        fs.rmSync(curPath, { recursive: true, force: true });
+      }
+      console.log(`[Startup Cleanup] Wiped all cached download files in ${downloadsDir}`);
+    } catch (e) {
+      console.warn(`[Startup Cleanup] Failed to wipe cache files: ${e.message}`);
+    }
+  }
+}
+
 module.exports = {
   checkConnection,
   addDownload,
@@ -553,5 +601,6 @@ module.exports = {
   pauseTask,
   unpauseTask,
   processNextQueueItem,
-  startMonitor
+  startMonitor,
+  wipeAllAria2Tasks
 };

@@ -351,30 +351,20 @@ app.listen(PORT, '0.0.0.0', () => {
   aria2.startMonitor();
   touchManager.initScheduler();
 
-  // On startup: reset any stuck DOWNLOADING queue items back to PAUSED
-  // Wipe any cached download files in data/downloads/ to start fresh
-  const downloadsDir = path.join(__dirname, 'data', 'downloads');
-  if (fs.existsSync(downloadsDir)) {
-    try {
-      const files = fs.readdirSync(downloadsDir);
-      for (const file of files) {
-        const curPath = path.join(downloadsDir, file);
-        fs.rmSync(curPath, { recursive: true, force: true });
-      }
-      console.log(`[Startup Cleanup] Wiped all cached download files in data/downloads/`);
-    } catch (e) {
-      console.warn(`[Startup Cleanup] Failed to wipe cache files: ${e.message}`);
-    }
-  }
+  // On startup: purge active tasks from aria2 RPC daemon & wipe cache directory
+  setTimeout(async () => {
+    await aria2.wipeAllAria2Tasks();
 
-  const queue = db.getAllQueue();
-  const stuckItems = queue.filter(q => q.status === 'DOWNLOADING');
-  if (stuckItems.length > 0) {
-    console.log(`[Queue Engine] Setting ${stuckItems.length} stuck DOWNLOADING item(s) to PAUSED (Interrupted by runtime restart)...`);
-    stuckItems.forEach(item => db.updateQueueItem(item.id, { 
-      status: 'PAUSED', 
-      gid: '', 
-      error: 'Interrupted by runtime restart. Requires manual start.' 
-    }));
-  }
+    // Reset any stuck DOWNLOADING queue items back to PAUSED
+    const queue = db.getAllQueue();
+    const stuckItems = queue.filter(q => q.status === 'DOWNLOADING');
+    if (stuckItems.length > 0) {
+      console.log(`[Queue Engine] Setting ${stuckItems.length} stuck DOWNLOADING item(s) to PAUSED (Interrupted by runtime restart)...`);
+      stuckItems.forEach(item => db.updateQueueItem(item.id, { 
+        status: 'PAUSED', 
+        gid: '', 
+        error: 'Interrupted by runtime restart. Requires manual start.' 
+      }));
+    }
+  }, 1500);
 });
