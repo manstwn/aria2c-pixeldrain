@@ -65,6 +65,7 @@ function extractVideoFrame(filePath, timestampSeconds, outputPath) {
       '-ss', timestampSeconds.toString(),
       '-i', filePath,
       '-vframes', '1',
+      '-threads', '2',
       '-q:v', '2',
       '-y',
       outputPath

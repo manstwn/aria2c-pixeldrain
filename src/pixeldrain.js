@@ -61,33 +61,59 @@ async function uploadToPixeldrain(filePath, overrideFilename, onProgress = null,
     }
   });
 
-  console.log(`[Pixeldrain] Streaming file (${metadata.formatBytes(stats.size)}) to ${uploadUrl}...`);
+  console.log(`[Pixeldrain] Streaming file (${metadata.formatBytes(stats.size)}) to ${uploadUrl} via native HTTPS stream...`);
+
+  const https = require('https');
+  const { URL } = require('url');
+  const parsedUrl = new URL(uploadUrl);
 
   try {
-    const response = await axios.put(uploadUrl, fileStream, {
+    const resData = await new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: parsedUrl.hostname,
+      port: 443,
+      path: parsedUrl.pathname,
+      method: 'PUT',
       headers: {
         'Authorization': `Basic ${Buffer.from(`:${token}`).toString('base64')}`,
         'Content-Type': 'application/octet-stream',
+        'Content-Length': stats.size,
         'User-Agent': USER_AGENT
-      },
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
-      timeout: 0 // Unlimited timeout for file stream
+      }
+    }, (res) => {
+      let body = '';
+      res.on('data', (chunk) => body += chunk);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            resolve(JSON.parse(body));
+          } catch (e) {
+            reject(new Error(`Invalid JSON response from Pixeldrain: ${body}`));
+          }
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}: ${body || res.statusMessage}`));
+        }
+      });
     });
 
-    if (onProgress) {
-      onProgress({
-        uploadProgress: 100,
-        uploadLoaded: stats.size,
-        uploadTotal: stats.size,
-        uploadSpeed: 0
-      });
-    }
+    req.on('error', (err) => reject(err));
 
-    const resData = response.data;
-    if (!resData || !resData.id) {
-      throw new Error(`Pixeldrain upload failed: ${JSON.stringify(resData)}`);
-    }
+    // Pipe stream directly to TCP socket with true backpressure
+    fileStream.pipe(req);
+  });
+
+  if (onProgress) {
+    onProgress({
+      uploadProgress: 100,
+      uploadLoaded: stats.size,
+      uploadTotal: stats.size,
+      uploadSpeed: 0
+    });
+  }
+
+  if (!resData || !resData.id) {
+    throw new Error(`Pixeldrain upload failed: ${JSON.stringify(resData)}`);
+  }
 
     const fileId = resData.id;
     const downloadPage = `https://pixeldrain.com/u/${fileId}`;
