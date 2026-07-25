@@ -115,8 +115,28 @@ app.get('/api/stream', (req, res) => {
 
   const sendUpdate = async () => {
     try {
-      const downloads = await aria2.getDownloadsStatus();
+      const downloadsStatus = await aria2.getDownloadsStatus();
       const conn = await aria2.checkConnection();
+      const persistentQueue = db.getAllQueue();
+
+      // Merge persistent queue items so nothing is omitted in SSE payload
+      const downloads = [...downloadsStatus];
+      persistentQueue.forEach(qItem => {
+        const exists = downloadsStatus.some(s => (qItem.gid && s.gid === qItem.gid) || s.filename === qItem.filename || s.gid === qItem.id);
+        if (!exists) {
+          downloads.push({
+            gid: qItem.id || qItem.gid,
+            filename: qItem.filename || qItem.custom_name || 'Queued Item',
+            status: qItem.status || 'QUEUED',
+            progress: 0,
+            downloadSpeed: 0,
+            completedLength: 0,
+            totalLength: 0,
+            errorMessage: qItem.error || ''
+          });
+        }
+      });
+
       const files = db.getAllFiles();
       const dataSizeBytes = getFolderSize(path.join(__dirname, 'data'));
       const dataSizeFormatted = formatBytes(dataSizeBytes);
