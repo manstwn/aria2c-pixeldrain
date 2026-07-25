@@ -275,7 +275,7 @@ function renderActiveDownloads(downloads) {
 
   if (!listEl || !emptyState) return;
 
-  const activeDownloadingTasks = downloads.filter(t => t.status === 'active' || t.status === 'UPLOADING' || t.status === 'UPLOAD_FAILED' || t.status === 'error');
+  const activeDownloadingTasks = downloads.filter(t => t.status === 'active' || t.status === 'UPLOADING' || t.status === 'PROCESSING' || t.status === 'UPLOAD_FAILED' || t.status === 'error');
   const queueTasks = downloads.filter(t => t.status === 'waiting' || t.status === 'paused' || t.status === 'PAUSED' || t.status === 'QUEUED' || t.status === 'DOWNLOADING');
 
   // Render Queue Column
@@ -303,11 +303,14 @@ function renderActiveDownloads(downloads) {
       const downloadedStr = formatBytes(task.completedLength || 0);
       const totalStr = formatBytes(task.totalLength || 0);
       const isUploading = task.status === 'UPLOADING';
+      const isProcessing = task.status === 'PROCESSING';
       const isFailed = task.status === 'UPLOAD_FAILED' || task.status === 'error';
 
       let statusTag = `<span class="tech-tag">${task.status.toUpperCase()}</span>`;
       if (isUploading) {
         statusTag = `<span class="tech-tag" style="background: rgba(245,158,11,0.2); color: #f59e0b;">UPLOADING...</span>`;
+      } else if (isProcessing) {
+        statusTag = `<span class="tech-tag" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4);"><span class="dot-pulse" style="background: #10b981;"></span> PROCESSING</span>`;
       } else if (isFailed) {
         statusTag = `<span class="tech-tag" style="background: rgba(239,68,68,0.2); color: #f87171;">FAILED</span>`;
       }
@@ -318,7 +321,7 @@ function renderActiveDownloads(downloads) {
         </div>
       ` : '';
 
-      const downloadStageHTML = !isUploading ? `
+      const downloadStageHTML = (!isUploading && !isProcessing) ? `
         <div class="download-stats">
           <span>Aria2 Download: <strong>${task.progress}%</strong></span>
           <span>Downloaded: ${downloadedStr} / ${totalStr}</span>
@@ -340,6 +343,15 @@ function renderActiveDownloads(downloads) {
         </div>
       ` : '';
 
+      const processingStageHTML = isProcessing ? `
+        <div class="download-stats" style="color: #10b981; font-weight: 600; background: rgba(16, 185, 129, 0.08); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.2);">
+          <span>⚙️ <strong>Post-Processing:</strong> ${escapeHtml(task.stageMessage || 'Processing metadata & thumbnails...')}</span>
+        </div>
+        <div class="progress-bar-bg" style="margin-top: 10px; height: 6px;">
+          <div class="progress-bar-fill" style="width: 100%; background: linear-gradient(90deg, #10b981, #3b82f6); animation: pulse 1.5s infinite;"></div>
+        </div>
+      ` : '';
+
       return `
         <div class="download-item-card">
           <div class="download-item-header">
@@ -353,6 +365,7 @@ function renderActiveDownloads(downloads) {
           </div>
           ${downloadStageHTML}
           ${uploadStageHTML}
+          ${processingStageHTML}
           ${errorDetailsHTML}
         </div>
       `;

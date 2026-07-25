@@ -227,6 +227,7 @@ async function getDownloadsStatus() {
         uploadLoaded: uploadInfo ? (uploadInfo.uploadLoaded || 0) : 0,
         uploadTotal: uploadInfo ? (uploadInfo.uploadTotal || 0) : 0,
         uploadSpeed: uploadInfo ? (uploadInfo.uploadSpeed || 0) : 0,
+        stageMessage: uploadInfo ? (uploadInfo.stageMessage || '') : '',
         errorMessage: task.errorMessage || (uploadInfo ? uploadInfo.error : '')
       };
     });

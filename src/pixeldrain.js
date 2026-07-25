@@ -118,6 +118,14 @@ async function uploadToPixeldrain(filePath, overrideFilename, onProgress = null,
     const fileId = resData.id;
     const downloadPage = `https://pixeldrain.com/u/${fileId}`;
 
+    if (onProgress) {
+      onProgress({
+        uploadProgress: 100,
+        status: 'PROCESSING',
+        stageMessage: 'Analyzing metadata...'
+      });
+    }
+
     const fileMeta = metadata.extractMetadata(filePath, sourceUrl);
     
     let originalFilename = path.basename(filePath);
@@ -132,6 +140,16 @@ async function uploadToPixeldrain(filePath, overrideFilename, onProgress = null,
     }
 
     const recordId = db.generateId();
+
+    const cat = fileMeta.category || 'file';
+    if (onProgress) {
+      onProgress({
+        uploadProgress: 100,
+        status: 'PROCESSING',
+        stageMessage: cat === 'video' ? '🎬 Video detected! Generating 15-frame screenshots...' : '🖼️ Generating preview thumbnails...'
+      });
+    }
+
     const thumbs = await thumbnailsModule.generateThumbnails(filePath, recordId, fileMeta);
 
     const now = new Date().toISOString();
