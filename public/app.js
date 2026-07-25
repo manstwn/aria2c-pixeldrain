@@ -380,7 +380,7 @@ function renderQueueTasks(queueTasks) {
   queueEmpty.classList.add('hidden');
 
   queueContainer.innerHTML = queueTasks.map((task, idx) => {
-    const isPaused = task.status === 'paused';
+    const isPaused = task.status === 'paused' || task.status === 'PAUSED';
     const isQueued = task.status === 'QUEUED' || task.status === 'waiting';
     const isDownloading = task.status === 'DOWNLOADING';
 
@@ -395,7 +395,11 @@ function renderQueueTasks(queueTasks) {
 
     const pauseResumeBtn = isPaused
       ? `<button class="btn-copy-mini" onclick="unpauseQueueTask('${task.gid}')" title="Resume task">▶️</button>`
-      : (isQueued ? `` : `<button class="btn-copy-mini" onclick="pauseQueueTask('${task.gid}')" title="Pause task">⏸️</button>`);
+      : (isQueued ? `<button class="btn-copy-mini" onclick="pauseQueueTask('${task.gid}')" title="Pause task">⏸️</button>` : ``);
+
+    const errorHTML = (isPaused && task.errorMessage) ? `
+      <div style="margin-top: 4px; font-size: 0.75rem; color: #f87171;">⚠️ ${escapeHtml(task.errorMessage)}</div>
+    ` : '';
 
     return `
       <div class="queue-item-card">
@@ -407,6 +411,7 @@ function renderQueueTasks(queueTasks) {
             <button class="btn-copy-mini" onclick="cancelDownloadTask('${task.gid}')" title="Cancel/Remove task">❌</button>
           </div>
         </div>
+        ${errorHTML}
       </div>
     `;
   }).join('');

@@ -248,7 +248,7 @@ async function getDownloadsStatus() {
           uploadLoaded: 0,
           uploadTotal: 0,
           uploadSpeed: 0,
-          errorMessage: ''
+          errorMessage: qItem.error || ''
         });
       }
     }
