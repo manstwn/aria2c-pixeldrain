@@ -170,17 +170,17 @@ app.get('/api/downloads', auth.requireAuth, async (req, res) => {
     // Merge persistent queue items from data/queue.json so nothing is lost on page refresh
     const mergedDownloads = [...status];
     persistentQueue.forEach(qItem => {
-      const existsInAria2 = status.some(s => (qItem.gid && s.gid === qItem.gid) || s.filename === qItem.filename);
+      const existsInAria2 = status.some(s => (qItem.gid && s.gid === qItem.gid) || s.filename === qItem.filename || s.gid === qItem.id);
       if (!existsInAria2) {
         mergedDownloads.push({
-          gid: qItem.gid || qItem.id,
+          gid: qItem.id || qItem.gid,
           filename: qItem.filename || qItem.custom_name || 'Queued Item',
-          status: qItem.status === 'PAUSED' ? 'paused' : 'waiting',
+          status: qItem.status || 'PAUSED',
           progress: 0,
           downloadSpeed: 0,
           completedLength: 0,
           totalLength: 0,
-          errorMessage: ''
+          errorMessage: qItem.error || ''
         });
       }
     });
@@ -266,11 +266,13 @@ app.post('/api/queue/:gid/pause', auth.requireAuth, async (req, res) => {
 app.post('/api/queue/:gid/unpause', auth.requireAuth, async (req, res) => {
   try {
     const { gid } = req.params;
-    await aria2.unpauseTask(gid);
-    db.updateQueueItem(gid, { status: 'QUEUED' });
+    try { await aria2.unpauseTask(gid); } catch (e) {}
+    db.updateQueueItem(gid, { status: 'QUEUED', error: '' });
+    setTimeout(() => aria2.processNextQueueItem(), 300);
     res.json({ success: true, message: 'Task resumed.' });
   } catch (err) {
-    db.updateQueueItem(req.params.gid, { status: 'QUEUED' });
+    db.updateQueueItem(req.params.gid, { status: 'QUEUED', error: '' });
+    setTimeout(() => aria2.processNextQueueItem(), 300);
     res.json({ success: true, message: 'Task marked resumed.' });
   }
 });
