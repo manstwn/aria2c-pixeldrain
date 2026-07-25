@@ -353,12 +353,23 @@ async function pollCompletedDownloads() {
           });
       } else if (task.status === 'error' && !processedGids.has(task.gid)) {
         processedGids.add(task.gid);
-        console.warn(`[Aria2] Task ${task.gid} failed with error (${task.errorMessage || 'unknown'}). Cleaning up temporary files...`);
+        console.warn(`[Aria2] Task ${task.gid} failed with error (${task.errorMessage || 'Invalid URL or download error'}). Cleaning up temporary files...`);
         await cleanUpTaskFiles(task.gid, task);
+        
+        // Find corresponding queue record and set to PAUSED with error message
+        const queuedItems = db.getAllQueue();
+        const qItem = queuedItems.find(q => q.gid === task.gid);
+        if (qItem) {
+          db.updateQueueItem(qItem.id, {
+            status: 'PAUSED',
+            gid: '',
+            error: task.errorMessage || 'Download failed (e.g. invalid URL or network error). Requires manual retry.'
+          });
+        }
+        
         try {
           await rpcCall('aria2.removeDownloadResult', [task.gid]);
         } catch (e) {}
-        processNextQueueItem();
       }
     }
 
