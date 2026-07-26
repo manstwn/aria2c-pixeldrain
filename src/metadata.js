@@ -391,7 +391,8 @@ function sanitizeVideoFile(filePath) {
       // 2. Remux raw MPEG-TS stream to standard MP4 container using ffmpeg
       try {
         const ffmpegCmd = `ffmpeg -y -i "${sanitizedRawPath}" -c copy "${sanitizedMp4Path}"`;
-        execSync(ffmpegCmd, { timeout: 30000, stdio: 'ignore' });
+        // Increase timeout to 10 minutes (600000ms) to ensure huge video streams can be safely remuxed
+        execSync(ffmpegCmd, { timeout: 600000, stdio: 'ignore' });
 
         if (fs.existsSync(sanitizedMp4Path) && fs.statSync(sanitizedMp4Path).size > 1000) {
           // Replace original file with clean remuxed MP4
