@@ -192,11 +192,30 @@ async function handleLogout() {
    DOWNLOAD TASK SUBMISSION & MONITORING
    ========================================================================== */
 
-async function handleDownloadSubmit(e) {
-  e.preventDefault();
+let selectedEngine = 'aria2';
+
+function selectEngine(engine) {
+  selectedEngine = engine;
+  const aria2Pill = document.getElementById('enginePillAria2');
+  const ytdlpPill = document.getElementById('enginePillYtdlp');
+  if (aria2Pill && ytdlpPill) {
+    if (engine === 'aria2') {
+      aria2Pill.classList.add('active');
+      ytdlpPill.classList.remove('active');
+    } else {
+      ytdlpPill.classList.add('active');
+      aria2Pill.classList.remove('active');
+    }
+  }
+}
+
+async function handleDownloadSubmit(event) {
+  event.preventDefault();
   const inputUrl = document.getElementById('downloadUrlInput');
   const inputName = document.getElementById('customFilenameInput');
   const btn = document.getElementById('btnSubmitDownload');
+
+  if (!inputUrl) return;
 
   const url = inputUrl.value.trim();
   const filename = inputName ? inputName.value.trim() : '';
@@ -210,7 +229,7 @@ async function handleDownloadSubmit(e) {
     const res = await fetch('/api/downloads', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, filename })
+      body: JSON.stringify({ url, filename, engine: selectedEngine })
     });
 
     const data = await res.json();
@@ -227,7 +246,7 @@ async function handleDownloadSubmit(e) {
     showToast('Network error while submitting URL', 'error');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Start Download`;
+    btn.innerHTML = `<span class="material-symbols-outlined">rocket_launch</span> Execute`;
   }
 }
 
@@ -306,6 +325,10 @@ function renderActiveDownloads(downloads) {
       const isProcessing = task.status === 'PROCESSING';
       const isFailed = task.status === 'UPLOAD_FAILED' || task.status === 'error';
 
+      const engineTag = task.engine === 'ytdlp'
+        ? `<span class="tech-tag" style="background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.3);">🎥 YT-DLP</span>`
+        : `<span class="tech-tag" style="background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3);">⚡ ARIA2</span>`;
+
       let statusTag = `<span class="tech-tag">${task.status.toUpperCase()}</span>`;
       if (isUploading) {
         statusTag = `<span class="tech-tag" style="background: rgba(245,158,11,0.2); color: #f59e0b;">UPLOADING...</span>`;
@@ -321,9 +344,11 @@ function renderActiveDownloads(downloads) {
         </div>
       ` : '';
 
+      const engineLabel = task.engine === 'ytdlp' ? 'yt-dlp Stream' : 'Aria2 Download';
+
       const downloadStageHTML = (!isUploading && !isProcessing) ? `
         <div class="download-stats">
-          <span>Aria2 Download: <strong>${task.progress}%</strong></span>
+          <span>${engineLabel}: <strong>${task.progress}%</strong></span>
           <span>Downloaded: ${downloadedStr} / ${totalStr}</span>
           <span>Speed: ⚡ <strong>${speed}</strong></span>
         </div>
@@ -356,7 +381,8 @@ function renderActiveDownloads(downloads) {
         <div class="download-item-card">
           <div class="download-item-header">
             <span class="filename-title">${escapeHtml(task.filename)}</span>
-            <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              ${engineTag}
               ${statusTag}
               <button class="btn-cancel-task" onclick="cancelDownloadTask('${task.gid}')" title="Cancel Task">
                 ✕ Cancel
@@ -406,6 +432,10 @@ function renderQueueTasks(queueTasks) {
       statusBadge = `<span class="status-badge live" style="background: rgba(0, 122, 255, 0.15); color: var(--color-electric-blue); border-color: rgba(0, 122, 255, 0.3);"><span class="dot-pulse" style="background: var(--color-electric-blue);"></span> QUEUED #${idx + 1}</span>`;
     }
 
+    const engineTag = task.engine === 'ytdlp'
+      ? `<span class="tech-tag" style="font-size: 0.7rem; padding: 2px 6px; background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.3);">🎥 YT-DLP</span>`
+      : `<span class="tech-tag" style="font-size: 0.7rem; padding: 2px 6px; background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3);">⚡ ARIA2</span>`;
+
     const pauseResumeBtn = isPaused
       ? `<button class="btn-copy-mini" onclick="unpauseQueueTask('${task.gid}')" title="Resume task">▶️</button>`
       : (isQueued ? `<button class="btn-copy-mini" onclick="pauseQueueTask('${task.gid}')" title="Pause task">⏸️</button>` : ``);
@@ -418,7 +448,10 @@ function renderQueueTasks(queueTasks) {
       <div class="queue-item-card">
         <div class="queue-item-title" title="${escapeHtml(task.filename)}">${escapeHtml(task.filename)}</div>
         <div class="queue-item-meta">
-          ${statusBadge}
+          <div style="display: flex; align-items: center; gap: 6px;">
+            ${engineTag}
+            ${statusBadge}
+          </div>
           <div style="display: flex; gap: 4px;">
             ${pauseResumeBtn}
             <button class="btn-copy-mini" onclick="cancelDownloadTask('${task.gid}')" title="Cancel/Remove task">❌</button>

@@ -36,6 +36,41 @@
   --radius-full: 9999px;
 }
 
+/* Engine Selector Pills */
+.engine-selector {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.engine-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background: var(--bg-surface-container-high);
+  border: 1px solid var(--glass-stroke);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.engine-pill:hover {
+  border-color: var(--color-electric-blue);
+  color: var(--text-primary);
+}
+
+.engine-pill.active {
+  background: rgba(0, 122, 255, 0.15);
+  border-color: var(--color-electric-blue);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(0, 122, 255, 0.3);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

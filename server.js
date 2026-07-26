@@ -193,21 +193,25 @@ app.get('/api/downloads', auth.requireAuth, async (req, res) => {
 
 app.post('/api/downloads', auth.requireAuth, async (req, res) => {
   try {
-    const { url, filename, customFilename } = req.body;
+    const { url, filename, customFilename, engine } = req.body;
     if (!url) {
       return res.status(400).json({ error: 'URL parameter is required.' });
     }
 
-    const conn = await aria2.checkConnection();
-    if (!conn.online) {
-      return res.status(503).json({
-        error: 'Aria2 RPC daemon is offline.',
-        details: 'Make sure aria2c is running with RPC enabled at ' + (process.env.ARIA2_RPC_URL || 'http://127.0.0.1:6800/jsonrpc')
-      });
+    const selectedEngine = engine === 'ytdlp' ? 'ytdlp' : 'aria2';
+
+    if (selectedEngine === 'aria2') {
+      const conn = await aria2.checkConnection();
+      if (!conn.online) {
+        return res.status(503).json({
+          error: 'Aria2 RPC daemon is offline.',
+          details: 'Make sure aria2c is running with RPC enabled at ' + (process.env.ARIA2_RPC_URL || 'http://127.0.0.1:6800/jsonrpc')
+        });
+      }
     }
 
     const chosenName = filename || customFilename || '';
-    const queueRecord = db.addToQueue({ url, custom_name: chosenName, status: 'QUEUED' });
+    const queueRecord = db.addToQueue({ url, custom_name: chosenName, engine: selectedEngine, status: 'QUEUED' });
 
     // Trigger Strict Serial Queue Engine: will launch immediately if pipeline is free,
     // or keep QUEUED if another task is currently downloading or uploading!

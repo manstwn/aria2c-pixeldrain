@@ -133,6 +133,18 @@
           </div>
 
           <form id="downloadForm" onsubmit="handleDownloadSubmit(event)" class="submission-form" style="margin: 0;">
+            <div class="engine-selector">
+              <label class="engine-pill active" id="enginePillAria2" onclick="selectEngine('aria2')">
+                <input type="radio" name="downloadEngine" value="aria2" checked style="display:none;">
+                <span class="material-symbols-outlined" style="font-size: 16px;">bolt</span>
+                <span>Aria2c (Multi-Conn File)</span>
+              </label>
+              <label class="engine-pill" id="enginePillYtdlp" onclick="selectEngine('ytdlp')">
+                <input type="radio" name="downloadEngine" value="ytdlp" style="display:none;">
+                <span class="material-symbols-outlined" style="font-size: 16px;">movie</span>
+                <span>yt-dlp (Video / HLS Stream)</span>
+              </label>
+            </div>
             <div class="input-group">
               <input type="url" id="downloadUrlInput" class="glow-input" placeholder="Enter source URL (https://... or magnet:...)" required>
               <input type="text" id="customFilenameInput" class="glow-input" placeholder="Optional filename (e.g. video.mp4)">

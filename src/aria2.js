@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const db = require('./db');
 const pixeldrain = require('./pixeldrain');
+const ytdlp = require('./ytdlp');
 require('dotenv').config();
 
 const ARIA2_RPC_URL = process.env.ARIA2_RPC_URL || 'http://127.0.0.1:6800/jsonrpc';
@@ -232,14 +233,22 @@ async function getDownloadsStatus() {
       };
     });
 
-    const aria2Gids = new Set(allTasks.map(t => t.gid));
+    const ytdlpTasks = ytdlp.getDownloadsStatus();
+    formattedTasks.push(...ytdlpTasks);
+
+    const activeGids = new Set([
+      ...allTasks.map(t => t.gid),
+      ...ytdlpTasks.map(t => t.gid)
+    ]);
     const queuedItems = db.getAllQueue();
 
     for (const qItem of queuedItems) {
-      if (!qItem.gid || !aria2Gids.has(qItem.gid)) {
+      const qId = qItem.id || qItem.gid;
+      if (!qId || !activeGids.has(qId)) {
         formattedTasks.push({
-          gid: qItem.id || qItem.gid,
+          gid: qId,
           filename: qItem.filename || qItem.custom_name || (qItem.url ? path.basename(qItem.url.split('?')[0]) : 'Queued Item'),
+          engine: qItem.engine || 'aria2',
           status: qItem.status || 'QUEUED',
           progress: 0,
           downloadSpeed: 0,
@@ -393,13 +402,14 @@ async function processNextQueueItem() {
   try {
     isProcessingQueue = true;
 
-    // 1. Check active downloads in Aria2 RPC
+    // 1. Check active downloads in Aria2 RPC & active yt-dlp tasks
     let activeTasks = [];
     try {
       activeTasks = await rpcCall('aria2.tellActive') || [];
     } catch (e) {}
 
-    const hasActiveDownload = activeTasks.length > 0;
+    const ytdlpActive = ytdlp.getDownloadsStatus().some(t => t.status === 'DOWNLOADING' || t.status === 'UPLOADING');
+    const hasActiveDownload = activeTasks.length > 0 || ytdlpActive;
 
     // 2. Check active uploads in memory map
     let hasActiveUpload = false;
@@ -420,15 +430,24 @@ async function processNextQueueItem() {
     const nextItem = queue.find(q => q.status === 'QUEUED');
     if (!nextItem) return;
 
-    console.log(`[Queue Engine] Pipeline clear. Launching next queued download: "${nextItem.filename}" (${nextItem.url})`);
+    console.log(`[Queue Engine] Pipeline clear. Launching next queued download (${nextItem.engine || 'aria2'}): "${nextItem.filename || nextItem.custom_name}" (${nextItem.url})`);
 
     // Mark status as DOWNLOADING in queue.json
     db.updateQueueItem(nextItem.id, { status: 'DOWNLOADING' });
 
-    // Submit to Aria2 RPC
-    const gid = await addDownload(nextItem.url, nextItem.custom_name);
-    if (gid) {
-      db.updateQueueItem(nextItem.id, { gid, status: 'DOWNLOADING' });
+    if (nextItem.engine === 'ytdlp') {
+      ytdlp.startDownload(nextItem, () => {
+        processNextQueueItem();
+      }, (err) => {
+        db.updateQueueItem(nextItem.id, { status: 'PAUSED', error: err.message || 'yt-dlp download failed' });
+        processNextQueueItem();
+      });
+    } else {
+      // Submit to Aria2 RPC
+      const gid = await addDownload(nextItem.url, nextItem.custom_name);
+      if (gid) {
+        db.updateQueueItem(nextItem.id, { gid, status: 'DOWNLOADING' });
+      }
     }
   } catch (err) {
     console.error('[Queue Engine] Error launching next queue item:', err.message);
@@ -450,6 +469,15 @@ function startMonitor() {
  */
 async function removeDownload(gid) {
   if (!gid) throw new Error('Valid GID is required.');
+
+  // If this is an active yt-dlp task
+  if (ytdlp.activeTasks.has(gid)) {
+    ytdlp.removeDownload(gid);
+    db.removeFromQueue(gid);
+    console.log(`[yt-dlp] Download task ${gid} cancelled.`);
+    setTimeout(() => processNextQueueItem(), 500);
+    return true;
+  }
 
   // If this is a persistent queue-only ID (not yet submitted to Aria2 RPC),
   // just delete it from queue.json directly without touching Aria2 at all.
