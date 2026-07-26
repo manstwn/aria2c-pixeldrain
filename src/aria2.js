@@ -386,7 +386,7 @@ async function pollCompletedDownloads() {
     // Process next queued task if pipeline is free
     processNextQueueItem();
   } catch (err) {
-    // Suppress polling errors when RPC is down
+    ensureAria2Daemon();
   }
 }
 
@@ -398,6 +398,8 @@ let isProcessingQueue = false;
  */
 async function processNextQueueItem() {
   if (isProcessingQueue) return;
+
+  let nextItem = null;
 
   try {
     isProcessingQueue = true;
@@ -427,15 +429,13 @@ async function processNextQueueItem() {
 
     // 3. Find next QUEUED item in data/queue.json
     const queue = db.getAllQueue();
-    const nextItem = queue.find(q => q.status === 'QUEUED');
+    nextItem = queue.find(q => q.status === 'QUEUED');
     if (!nextItem) return;
 
     console.log(`[Queue Engine] Pipeline clear. Launching next queued download (${nextItem.engine || 'aria2'}): "${nextItem.filename || nextItem.custom_name}" (${nextItem.url})`);
 
-    // Mark status as DOWNLOADING in queue.json
-    db.updateQueueItem(nextItem.id, { status: 'DOWNLOADING' });
-
     if (nextItem.engine === 'ytdlp') {
+      db.updateQueueItem(nextItem.id, { status: 'DOWNLOADING' });
       ytdlp.startDownload(nextItem, () => {
         processNextQueueItem();
       }, (err) => {
@@ -451,6 +451,9 @@ async function processNextQueueItem() {
     }
   } catch (err) {
     console.error('[Queue Engine] Error launching next queue item:', err.message);
+    if (nextItem) {
+      db.updateQueueItem(nextItem.id, { status: 'QUEUED', error: err.message || 'Failed to start' });
+    }
   } finally {
     isProcessingQueue = false;
   }
@@ -577,6 +580,8 @@ async function unpauseTask(gid) {
  * then wipe local cache files from disk.
  */
 async function wipeAllAria2Tasks() {
+  let rpcReachable = true;
+
   try {
     // 1. Force purge active tasks
     try {
@@ -584,39 +589,57 @@ async function wipeAllAria2Tasks() {
       for (const task of active) {
         try { await rpcCall('aria2.forceRemove', [task.gid]); } catch (e) {}
       }
-    } catch (e) {}
+    } catch (e) {
+      rpcReachable = false;
+    }
 
     // 2. Force purge waiting tasks
-    try {
-      const waiting = await rpcCall('aria2.tellWaiting', [0, 100]) || [];
-      for (const task of waiting) {
-        try { await rpcCall('aria2.forceRemove', [task.gid]); } catch (e) {}
+    if (rpcReachable) {
+      try {
+        const waiting = await rpcCall('aria2.tellWaiting', [0, 100]) || [];
+        for (const task of waiting) {
+          try { await rpcCall('aria2.forceRemove', [task.gid]); } catch (e) {}
+        }
+      } catch (e) {
+        rpcReachable = false;
       }
-    } catch (e) {}
+    }
 
     // 3. Purge stopped/completed results from aria2 memory
-    try {
-      await rpcCall('aria2.purgeDownloadResult');
-    } catch (e) {}
+    if (rpcReachable) {
+      try {
+        await rpcCall('aria2.purgeDownloadResult');
+      } catch (e) {
+        rpcReachable = false;
+      }
+    }
 
-    console.log('[Aria2] All active and waiting tasks purged from Aria2 RPC daemon.');
+    if (rpcReachable) {
+      console.log('[Aria2] All active and waiting tasks purged from Aria2 RPC daemon.');
+    }
   } catch (err) {
+    rpcReachable = false;
     console.warn(`[Aria2] Error purging Aria2 tasks on startup: ${err.message}`);
   }
 
-  // 4. Give aria2 a moment to release file handles, then delete all download files
-  const downloadsDir = path.resolve(db.DOWNLOADS_DIR);
-  if (fs.existsSync(downloadsDir)) {
-    try {
-      const files = fs.readdirSync(downloadsDir);
-      for (const file of files) {
-        const curPath = path.join(downloadsDir, file);
-        fs.rmSync(curPath, { recursive: true, force: true });
+  // 4. Only delete download files if RPC was reachable and purge succeeded,
+  //    otherwise completed tasks still in aria2 would report missing files.
+  if (rpcReachable) {
+    const downloadsDir = path.resolve(db.DOWNLOADS_DIR);
+    if (fs.existsSync(downloadsDir)) {
+      try {
+        const files = fs.readdirSync(downloadsDir);
+        for (const file of files) {
+          const curPath = path.join(downloadsDir, file);
+          fs.rmSync(curPath, { recursive: true, force: true });
+        }
+        console.log(`[Startup Cleanup] Wiped all cached download files in ${downloadsDir}`);
+      } catch (e) {
+        console.warn(`[Startup Cleanup] Failed to wipe cache files: ${e.message}`);
       }
-      console.log(`[Startup Cleanup] Wiped all cached download files in ${downloadsDir}`);
-    } catch (e) {
-      console.warn(`[Startup Cleanup] Failed to wipe cache files: ${e.message}`);
     }
+  } else {
+    console.log('[Startup Cleanup] Skipped file cleanup: RPC daemon unreachable, preserving completed task files.');
   }
 }
 
