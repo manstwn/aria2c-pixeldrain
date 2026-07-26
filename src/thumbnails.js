@@ -97,17 +97,24 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
 
   const category = meta.category || 'file';
   const thumbnails = [];
+  let treatAsVideo = false;
 
   // =========================================================================
   // IMAGE THUMBNAIL GENERATION
   // =========================================================================
   if (category === 'image') {
     try {
-      const outFilename = `${fileId}-thumb.jpg`;
-      const outPath = path.join(IMAGES_DIR, outFilename);
-      fs.copyFileSync(filePath, outPath);
-      console.log(`[Thumbnails] Saved image thumbnail: ${outFilename}`);
-      return [`/data/image/${outFilename}`];
+      const stats = fs.statSync(filePath);
+      if (stats.size > 20 * 1024 * 1024) {
+        console.log(`[Thumbnails] "${path.basename(filePath)}" classified as image but is ${(stats.size / 1024 / 1024).toFixed(1)}MB — assuming misclassified video, trying frame extraction.`);
+        treatAsVideo = true;
+      } else {
+        const outFilename = `${fileId}-thumb.jpg`;
+        const outPath = path.join(IMAGES_DIR, outFilename);
+        fs.copyFileSync(filePath, outPath);
+        console.log(`[Thumbnails] Saved image thumbnail: ${outFilename}`);
+        return [`/data/image/${outFilename}`];
+      }
     } catch (err) {
       console.warn(`[Thumbnails Warning] Could not copy image thumbnail:`, err.message);
       return [];
@@ -117,7 +124,7 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
   // =========================================================================
   // VIDEO 15-FRAME SCREENSHOT GENERATION ACROSS REAL DURATION
   // =========================================================================
-  if (category === 'video') {
+  if (category === 'video' || treatAsVideo) {
     if (!isFFmpegAvailable()) {
       console.warn(`[Thumbnails Info] ffmpeg is not installed on this VPS/system. Skipping 15-frame video screenshots. (Install with: apt install ffmpeg)`);
       return [];
