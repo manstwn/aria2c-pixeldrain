@@ -62,13 +62,15 @@ function detectCategoryAndExtension(buf, filename, sourceUrl) {
     } catch (e) {}
   }
 
+  const categoryByExt = getCategory(ext);
+
   if (buf && buf.length >= 8) {
     // PNG
     if (buf.toString('hex', 0, 8) === '89504e470d0a1a0a') {
       return { category: 'image', extension: ext || 'png' };
     }
-    // JPEG
-    if (buf[0] === 0xFF && buf[1] === 0xD8) {
+    // JPEG (must be FF D8 FF)
+    if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) {
       return { category: 'image', extension: ext || 'jpg' };
     }
     // GIF
@@ -89,7 +91,11 @@ function detectCategoryAndExtension(buf, filename, sourceUrl) {
     }
   }
 
-  return { category: getCategory(ext), extension: ext || 'file' };
+  if (categoryByExt === 'video') {
+    return { category: 'video', extension: ext || 'mp4' };
+  }
+
+  return { category: categoryByExt, extension: ext || 'file' };
 }
 
 /**
