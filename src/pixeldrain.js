@@ -21,6 +21,9 @@ async function uploadToPixeldrain(filePath, overrideFilename, onProgress = null,
     throw new Error(`File not found on disk for upload: ${filePath}`);
   }
 
+  // Detect & sanitize fake PNG headers (e.g. obfuscated HLS streams) into clean ISO MP4 video
+  metadata.sanitizeVideoFile(filePath);
+
   const filename = overrideFilename || path.basename(filePath);
   const token = (process.env.PIXELDRAIN_API_TOKEN || '').trim();
   const stats = fs.statSync(filePath);

@@ -351,10 +351,77 @@ function extractMetadata(filePath, sourceUrl = '') {
   return meta;
 }
 
+/**
+ * Detect and sanitize fake image headers (e.g. obfuscated HLS stream PNG headers)
+ * and remux into a clean ISO MP4 video container.
+ */
+function sanitizeVideoFile(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return filePath;
+
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(16);
+    fs.readSync(fd, buf, 0, 16, 0);
+    fs.closeSync(fd);
+
+    // Check if video file starts with PNG magic bytes (89 50 4e 47 0d 0a 1a 0a)
+    if (buf.toString('hex', 0, 8) === '89504e470d0a1a0a') {
+      console.log(`[Video Sanitizer] Fake PNG header detected in ${path.basename(filePath)}. Stripping header & remuxing with ffmpeg...`);
+      const sanitizedRawPath = `${filePath}.raw.ts`;
+      const sanitizedMp4Path = `${filePath}.sanit.mp4`;
+
+      // 1. Strip the fake 74-byte PNG header (0x4a bytes)
+      const inputFd = fs.openSync(filePath, 'r');
+      const outputFd = fs.openSync(sanitizedRawPath, 'w');
+      const stats = fs.statSync(filePath);
+
+      const chunkSize = 1024 * 1024;
+      const buffer = Buffer.alloc(chunkSize);
+      let position = 74; // Skip fake 74-byte PNG header
+
+      while (position < stats.size) {
+        const bytesRead = fs.readSync(inputFd, buffer, 0, Math.min(chunkSize, stats.size - position), position);
+        if (bytesRead <= 0) break;
+        fs.writeSync(outputFd, buffer, 0, bytesRead);
+        position += bytesRead;
+      }
+      fs.closeSync(inputFd);
+      fs.closeSync(outputFd);
+
+      // 2. Remux raw MPEG-TS stream to standard MP4 container using ffmpeg
+      try {
+        const ffmpegCmd = `ffmpeg -y -i "${sanitizedRawPath}" -c copy "${sanitizedMp4Path}"`;
+        execSync(ffmpegCmd, { timeout: 30000, stdio: 'ignore' });
+
+        if (fs.existsSync(sanitizedMp4Path) && fs.statSync(sanitizedMp4Path).size > 1000) {
+          // Replace original file with clean remuxed MP4
+          fs.rmSync(filePath, { force: true });
+          fs.renameSync(sanitizedMp4Path, filePath);
+          console.log(`[Video Sanitizer] ✅ Successfully remuxed ${path.basename(filePath)} into clean ISO MP4 video!`);
+        }
+      } catch (remuxErr) {
+        console.warn(`[Video Sanitizer] ffmpeg remux warning: ${remuxErr.message}`);
+      } finally {
+        if (fs.existsSync(sanitizedRawPath)) {
+          try { fs.rmSync(sanitizedRawPath, { force: true }); } catch (e) {}
+        }
+        if (fs.existsSync(sanitizedMp4Path)) {
+          try { fs.rmSync(sanitizedMp4Path, { force: true }); } catch (e) {}
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`[Video Sanitizer] Exception checking video file: ${err.message}`);
+  }
+
+  return filePath;
+}
+
 module.exports = {
   formatBytes,
   formatDuration,
   getCategory,
-  extractMetadata
+  extractMetadata,
+  sanitizeVideoFile
 };
 
