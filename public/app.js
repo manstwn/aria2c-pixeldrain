@@ -294,8 +294,8 @@ function renderActiveDownloads(downloads) {
 
   if (!listEl || !emptyState) return;
 
-  const activeDownloadingTasks = downloads.filter(t => t.status === 'active' || t.status === 'UPLOADING' || t.status === 'PROCESSING' || t.status === 'UPLOAD_FAILED' || t.status === 'error');
-  const queueTasks = downloads.filter(t => t.status === 'waiting' || t.status === 'paused' || t.status === 'PAUSED' || t.status === 'QUEUED' || t.status === 'DOWNLOADING');
+  const activeDownloadingTasks = downloads.filter(t => t.status === 'active' || t.status === 'DOWNLOADING' || t.status === 'UPLOADING' || t.status === 'PROCESSING' || t.status === 'UPLOAD_FAILED' || t.status === 'error' || t.status === 'ERROR');
+  const queueTasks = downloads.filter(t => t.status === 'waiting' || t.status === 'paused' || t.status === 'PAUSED' || t.status === 'QUEUED');
 
   // Render Queue Column
   renderQueueTasks(queueTasks);
@@ -321,17 +321,20 @@ function renderActiveDownloads(downloads) {
       const speed = task.downloadSpeed ? `${formatBytes(task.downloadSpeed)}/s` : '0 B/s';
       const downloadedStr = formatBytes(task.completedLength || 0);
       const totalStr = formatBytes(task.totalLength || 0);
+      const isDownloading = task.status === 'DOWNLOADING' || task.status === 'active';
       const isUploading = task.status === 'UPLOADING';
       const isProcessing = task.status === 'PROCESSING';
-      const isFailed = task.status === 'UPLOAD_FAILED' || task.status === 'error';
+      const isFailed = task.status === 'UPLOAD_FAILED' || task.status === 'error' || task.status === 'ERROR';
 
       const engineTag = task.engine === 'ytdlp'
         ? `<span class="tech-tag" style="background: rgba(168,85,247,0.15); color: #c084fc; border: 1px solid rgba(168,85,247,0.3);">🎥 YT-DLP</span>`
         : `<span class="tech-tag" style="background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3);">⚡ ARIA2</span>`;
 
       let statusTag = `<span class="tech-tag">${task.status.toUpperCase()}</span>`;
-      if (isUploading) {
-        statusTag = `<span class="tech-tag" style="background: rgba(245,158,11,0.2); color: #f59e0b;">UPLOADING...</span>`;
+      if (isDownloading) {
+        statusTag = `<span class="tech-tag" style="background: rgba(0, 122, 255, 0.2); color: var(--color-electric-blue); border: 1px solid rgba(0, 122, 255, 0.4);"><span class="dot-pulse" style="background: var(--color-electric-blue);"></span> DOWNLOADING...</span>`;
+      } else if (isUploading) {
+        statusTag = `<span class="tech-tag" style="background: rgba(245,158,11,0.2); color: #f59e0b;"><span class="dot-pulse" style="background: #f59e0b;"></span> UPLOADING...</span>`;
       } else if (isProcessing) {
         statusTag = `<span class="tech-tag" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4);"><span class="dot-pulse" style="background: #10b981;"></span> PROCESSING</span>`;
       } else if (isFailed) {
