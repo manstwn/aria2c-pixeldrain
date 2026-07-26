@@ -156,6 +156,7 @@ function addToQueue(item) {
     url: item.url || '',
     custom_name: item.custom_name || '',
     filename: item.filename || item.custom_name || (item.url ? path.basename(item.url.split('?')[0]) : 'Queued Item'),
+    engine: item.engine || 'aria2',
     status: item.status || 'QUEUED',
     created_at: now
   };
