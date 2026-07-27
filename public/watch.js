@@ -169,6 +169,16 @@ async function loadVideoDetails() {
     document.getElementById('specTouched').textContent = formatRelativeTime(currentFile.last_touched);
     document.getElementById('specCreated').textContent = formatUTC(currentFile.created_at);
 
+    // Populate Tags
+    const tagsEl = document.getElementById('specTags');
+    if (tagsEl) {
+      if (currentFile.tags && currentFile.tags.length > 0) {
+        tagsEl.innerHTML = currentFile.tags.map(t => `<span class="file-tag-pill" style="font-size: 0.7rem; padding: 2px 8px;">🏷️ ${escapeHtml(t)}</span>`).join('');
+      } else {
+        tagsEl.innerHTML = `<span style="font-size: 0.775rem; color: var(--text-muted); font-style: italic;">No tags</span>`;
+      }
+    }
+
     const externalLink = document.getElementById('linkExternalPixeldrain');
     if (externalLink && currentFile.download_url) {
       externalLink.href = currentFile.download_url;
@@ -292,6 +302,16 @@ async function deleteCurrentFile() {
 }
 
 /* Helper Utilities */
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function formatBytes(bytes) {
   if (!bytes) return '0 B';
   const k = 1024;

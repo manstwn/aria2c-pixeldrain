@@ -22,12 +22,9 @@
       }
     }
     .video-card-container {
-      background: rgba(15, 23, 42, 0.65);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid var(--glass-stroke, rgba(255, 255, 255, 0.1));
-      border-radius: var(--radius-xl, 16px);
-      padding: 16px;
+      background: transparent;
+      border: none;
+      padding: 0;
       overflow: hidden;
     }
     .video-wrapper {
@@ -137,36 +134,24 @@
   <div id="mainDashboard">
 
     <!-- DESKTOP SIDEBAR NAVIGATION -->
-    <aside class="app-sidebar">
-      <div style="margin-bottom: 24px; padding: 0 4px;">
-        <h1 class="sidebar-brand-title">PixelTouch</h1>
-        <p class="mono" style="font-size: 0.725rem; color: var(--text-muted); margin-top: 2px;">Cinema Player V3.1.2</p>
-      </div>
-
-      <a href="/" class="btn-submit glow-blue" style="width: 100%; justify-content: center; margin-bottom: 20px; padding: 10px 16px; font-size: 0.9rem; text-decoration: none;">
-        <span class="material-symbols-outlined" style="font-size: 20px;">dashboard</span>
-        Command Dashboard
-      </a>
-
-      <nav class="sidebar-nav-list">
-        <a href="/" class="sidebar-nav-item">
-          <span class="material-symbols-outlined">dashboard</span>
-          <span>Command</span>
-        </a>
-        <a href="/gallery" class="sidebar-nav-item">
-          <span class="material-symbols-outlined">photo_library</span>
-          <span>Gallery</span>
-        </a>
-      </nav>
-    </aside>
-
     <!-- TOP NAVIGATION BAR -->
     <header class="app-topbar">
-      <div class="header-left" style="display: flex; align-items: center; gap: 12px;">
-        <a href="/gallery" class="btn-table-action" style="padding: 6px 12px; text-decoration: none; display: flex; align-items: center; gap: 4px;">
+      <div class="header-left">
+        <a href="/gallery" class="btn-table-action" style="padding: 5px 10px; text-decoration: none; display: flex; align-items: center; gap: 4px;">
           <span class="material-symbols-outlined" style="font-size: 16px;">arrow_back</span> Back
         </a>
-        <span class="brand-title">PixelTouch Cinema Player</span>
+        <span class="brand-title">PixelTouch Cinema</span>
+
+        <nav class="header-nav-links">
+          <a href="/" class="header-nav-link">
+            <span class="material-symbols-outlined" style="font-size: 18px;">dashboard</span>
+            <span>Command</span>
+          </a>
+          <a href="/gallery" class="header-nav-link">
+            <span class="material-symbols-outlined" style="font-size: 18px;">photo_library</span>
+            <span>Gallery</span>
+          </a>
+        </nav>
       </div>
 
       <div class="header-right">
@@ -247,6 +232,12 @@
             <div class="spec-item flex-between">
               <span class="spec-label">Status:</span>
               <span class="spec-value" id="specStatus">N/A</span>
+            </div>
+            <div class="spec-item flex-between" style="align-items: flex-start; gap: 8px;">
+              <span class="spec-label">Tags:</span>
+              <div id="specTags" style="display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end;">
+                <span style="font-size: 0.775rem; color: var(--text-muted); font-style: italic;">No tags</span>
+              </div>
             </div>
             <div class="spec-item flex-between">
               <span class="spec-label">Last Touched:</span>

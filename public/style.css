@@ -328,102 +328,74 @@ input:focus {
    ========================================================================== */
 
 .app-sidebar {
-  position: fixed;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 256px;
-  background: rgba(11, 19, 38, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-right: 1px solid var(--glass-stroke);
-  display: flex;
-  flex-direction: column;
-  padding: 24px 16px;
-  z-index: 100;
-  transition: all 0.3s ease;
-}
-
-.sidebar-brand-title {
-  font-size: 1.35rem;
-  font-weight: 800;
-  color: var(--color-primary);
-  letter-spacing: -0.02em;
-}
-
-.sidebar-nav-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 24px;
-  flex: 1;
-}
-
-.sidebar-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: var(--radius-md);
-  color: var(--text-muted);
-  text-decoration: none;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.sidebar-nav-item:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.sidebar-nav-item.active {
-  color: var(--color-primary);
-  background: rgba(0, 122, 255, 0.12);
-  border-right: 3px solid var(--color-electric-blue);
-  font-weight: 700;
-}
-
-.sidebar-user-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px;
-  background: var(--bg-surface-container-low);
-  border: 1px solid var(--glass-stroke);
-  border-radius: var(--radius-lg);
-  margin-top: auto;
+  display: none !important;
 }
 
 .app-topbar {
   position: fixed;
   top: 0;
   right: 0;
-  left: 256px;
+  left: 0;
   height: 64px;
-  background: rgba(17, 25, 43, 0.85);
+  background: rgba(17, 25, 43, 0.88);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--glass-stroke);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 24px;
   z-index: 90;
 }
 
+.app-topbar .header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
 .app-topbar .brand-title {
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 800;
   color: var(--color-primary);
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
 
+.header-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.header-nav-link:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.header-nav-link.active {
+  color: var(--color-electric-blue);
+  background: rgba(0, 122, 255, 0.12);
+  font-weight: 700;
+}
+
 .app-topbar .header-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .sse-pill {
@@ -433,7 +405,7 @@ input:focus {
 }
 
 .main-content-canvas {
-  margin-left: 256px;
+  margin: 0 auto;
   padding-top: 84px;
   padding-left: 24px;
   padding-right: 24px;
