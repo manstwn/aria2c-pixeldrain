@@ -8,6 +8,7 @@ const db = require('./src/db');
 const auth = require('./src/auth');
 const aria2 = require('./src/aria2');
 const touchManager = require('./src/touchManager');
+const logger = require('./src/logger');
 
 const app = express();
 const PORT = process.env.PORT || 6258;
@@ -356,6 +357,135 @@ app.delete('/api/files/:id', auth.requireAuth, (req, res) => {
   }
 });
 
+// Dedicated Video Watch & Streaming Proxy Routes
+app.get('/watch', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'watch.html'));
+});
+
+/**
+ * Helper to stream video from Pixeldrain with redirect support and verbose logging
+ */
+function streamVideoFromPixeldrain(targetUrl, headers, req, res, depth = 0) {
+  if (depth > 5) {
+    logger.error(`[Video Proxy Error] Exceeded max redirects (5) for URL: ${targetUrl}`);
+    return res.status(502).json({ error: 'Too many redirects from Pixeldrain server.' });
+  }
+
+  const https = require('https');
+  const { URL } = require('url');
+  const parsedUrl = new URL(targetUrl);
+
+  const options = {
+    hostname: parsedUrl.hostname,
+    port: parsedUrl.port || 443,
+    path: parsedUrl.pathname + parsedUrl.search,
+    method: 'GET',
+    headers: headers
+  };
+
+  logger.debug(`[Video Proxy Stream] Requesting (Depth ${depth}) -> ${targetUrl}`);
+
+  const proxyReq = https.request(options, (proxyRes) => {
+    logger.debug(`[Video Proxy Response] Status: ${proxyRes.statusCode} | Headers:`, {
+      'content-type': proxyRes.headers['content-type'],
+      'content-length': proxyRes.headers['content-length'],
+      'content-range': proxyRes.headers['content-range'],
+      'accept-ranges': proxyRes.headers['accept-ranges'],
+      'location': proxyRes.headers['location'] || 'None'
+    });
+
+    // Handle 301/302/307/308 Redirects from Pixeldrain
+    if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
+      const redirectUrl = new URL(proxyRes.headers.location, targetUrl).toString();
+      logger.debug(`[Video Proxy Redirect] ${proxyRes.statusCode} redirect -> ${redirectUrl}`);
+      return streamVideoFromPixeldrain(redirectUrl, headers, req, res, depth + 1);
+    }
+
+    res.status(proxyRes.statusCode);
+
+    const headersToForward = [
+      'content-type',
+      'content-length',
+      'content-range',
+      'accept-ranges',
+      'last-modified',
+      'cache-control',
+      'etag'
+    ];
+
+    headersToForward.forEach(header => {
+      if (proxyRes.headers[header]) {
+        res.setHeader(header, proxyRes.headers[header]);
+      }
+    });
+
+    if (!res.getHeader('Content-Type')) {
+      res.setHeader('Content-Type', 'video/mp4');
+    }
+
+    logger.debug(`[Video Proxy Piping] Streaming bytes to client response (Status ${proxyRes.statusCode})...`);
+    proxyRes.pipe(res);
+  });
+
+  proxyReq.on('error', (err) => {
+    logger.error(`[Video Proxy Request Error] ${err.message}`);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Video streaming failed: ' + err.message });
+    }
+  });
+
+  req.on('close', () => {
+    logger.debug('[Video Proxy Stream] Client closed connection / stopped playback.');
+    try { proxyReq.destroy(); } catch (e) {}
+  });
+
+  // End request stream to send HTTP GET to Pixeldrain!
+  proxyReq.end();
+}
+
+app.get('/api/video/:id', (req, res) => {
+  const { id } = req.params;
+  const rangeHeader = req.headers.range || 'None';
+
+  logger.debug(`[Video Proxy API] Incoming GET /api/video/${id} | Range: ${rangeHeader}`);
+
+  const token = req.cookies?.gotouch_token || req.query.token || (req.headers.authorization && req.headers.authorization.split(' ')[1]);
+  const decoded = auth.verifyToken(token);
+
+  if (!decoded) {
+    logger.warn(`[Video Proxy Auth Failed] Unauthorized request for video ID ${id}. Invalid/missing token.`);
+    return res.status(401).json({ error: 'Unauthorized', message: 'PIN authentication required.' });
+  }
+
+  logger.debug(`[Video Proxy Auth Success] Authenticated session for video ID ${id}`);
+
+  const file = db.getFileById(id);
+  if (!file || !file.pixeldrain_id) {
+    logger.warn(`[Video Proxy Not Found] Record ID ${id} not found or missing pixeldrain_id in database.`);
+    return res.status(404).json({ error: 'Video file record not found or missing Pixeldrain ID.' });
+  }
+
+  logger.debug(`[Video Proxy File Record] File: "${file.filename}" | Pixeldrain ID: ${file.pixeldrain_id} | Status: ${file.status}`);
+
+  const targetUrl = `https://pixeldrain.com/api/file/${file.pixeldrain_id}`;
+  const reqHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': '*/*'
+  };
+
+  const pixeldrainToken = (process.env.PIXELDRAIN_API_TOKEN || '').trim();
+  if (pixeldrainToken) {
+    reqHeaders['Authorization'] = `Basic ${Buffer.from(`:${pixeldrainToken}`).toString('base64')}`;
+    logger.debug('[Video Proxy Auth] Attached Pixeldrain API basic authorization header');
+  }
+
+  if (req.headers.range) {
+    reqHeaders['Range'] = req.headers.range;
+  }
+
+  streamVideoFromPixeldrain(targetUrl, reqHeaders, req, res);
+});
+
 // Dedicated Gallery Page Route
 app.get('/gallery', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'gallery.html'));
@@ -365,6 +495,7 @@ app.get('/gallery', (req, res) => {
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
 
 // Start Background Services & Server
 app.listen(PORT, '0.0.0.0', () => {

@@ -328,6 +328,10 @@ function renderGalleryPage() {
               <button class="btn-copy-mini" onclick="copyToClipboard('${escapeHtml(file.download_url)}')" title="Copy Link">📋</button>
             </div>
           ` : ''}
+
+          ${cat === 'video' ? `
+            <a href="/watch?id=${file.id}" class="btn-table-action primary" style="width: 100%; margin-top: 8px; text-decoration: none; text-align: center; font-weight: 700; background: linear-gradient(135deg, #007aff, #00c6ff); color: #fff; display: flex; align-items: center; justify-content: center; gap: 6px;" title="Watch Video">▶️ Play Video</a>
+          ` : ''}
         </div>
       </div>
     `;

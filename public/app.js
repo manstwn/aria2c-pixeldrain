@@ -768,10 +768,12 @@ function renderLedger() {
                 <button class="btn-table-action success" onclick="triggerSingleTouch('${file.id}')" title="Ping Pixeldrain Link">⚡ Touch</button>
                 ${galleryBtn ? galleryBtn : `<button class="btn-table-action" disabled style="opacity: 0.3; cursor: not-allowed;">🖼️ N/A</button>`}
               </div>
+              ${cat === 'video' ? `<a href="/watch?id=${file.id}" class="btn-table-action primary" style="width: 100%; text-decoration: none; text-align: center; font-weight: 700; background: linear-gradient(135deg, #007aff, #00c6ff); color: #fff;" title="Watch Video">▶️ Play Video</a>` : ''}
               <button class="btn-table-action danger" onclick="deleteRecord('${file.id}')" title="Delete Ledger Entry" style="width: 100%;">🗑️ Delete</button>
             </div>
           </td>
         </tr>
+
       `;
     }).join('');
   }
@@ -858,6 +860,7 @@ function renderLedger() {
           </div>
 
           <div class="card-actions-row">
+            ${cat === 'video' ? `<a href="/watch?id=${file.id}" class="btn-table-action primary" style="text-decoration:none; font-weight:700; background: linear-gradient(135deg, #007aff, #00c6ff); color:#fff;">▶️ Play</a>` : ''}
             ${galleryBtn}
             <button class="btn-table-action primary" onclick="showFileMetadata('${file.id}')">🔍 Meta</button>
             <button class="btn-table-action" onclick="copyToClipboard('${escapeHtml(file.download_url)}')">📋 Copy</button>
@@ -968,6 +971,16 @@ function showFileMetadata(id) {
     </div>
     ` : ''}
   `;
+
+  const watchBtn = document.getElementById('metaBtnWatch');
+  if (watchBtn) {
+    if (cat === 'video') {
+      watchBtn.href = `/watch?id=${file.id}`;
+      watchBtn.classList.remove('hidden');
+    } else {
+      watchBtn.classList.add('hidden');
+    }
+  }
 
   document.getElementById('metaBtnTouch').onclick = () => { triggerSingleTouch(file.id); };
   document.getElementById('metaBtnCopyGoFile').onclick = () => { copyToClipboard(file.download_url); };
