@@ -444,14 +444,20 @@ input:focus {
 .status-indicator-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--glass-stroke);
-  padding: 6px 14px;
+  padding: 5px 12px;
   border-radius: var(--radius-full);
-  font-size: 0.8rem;
-  font-weight: 500;
+  font-size: 0.775rem;
+  font-weight: 600;
   font-family: var(--font-mono);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.status-indicator-pill span {
+  white-space: nowrap;
 }
 
 .status-dot {
@@ -1867,9 +1873,30 @@ input:focus {
   }
   .app-topbar {
     left: 0;
+    padding: 0 10px;
+    height: 56px;
+  }
+  .app-topbar .brand-title {
+    font-size: 0.85rem;
+    font-weight: 800;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .app-topbar .header-right {
+    gap: 4px;
+  }
+  .status-indicator-pill {
+    padding: 3px 8px;
+    font-size: 0.675rem;
+    gap: 4px;
   }
   .main-content-canvas {
     margin-left: 0;
+    padding-top: 72px;
+    padding-left: 12px;
+    padding-right: 12px;
     padding-bottom: 90px;
   }
   .mobile-bottom-nav {

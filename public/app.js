@@ -81,7 +81,7 @@ function connectSSE() {
 
       if (data.dataSizeFormatted) {
         const storageText = document.getElementById('storageText');
-        if (storageText) storageText.textContent = `Data: ${data.dataSizeFormatted}`;
+        if (storageText) storageText.textContent = data.dataSizeFormatted;
       }
 
       if (data.downloads) {
