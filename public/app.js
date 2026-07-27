@@ -41,13 +41,12 @@ function showDashboard() {
   fetchDownloads();
   fetchFiles();
   connectSSE();
-
-  // Fast 1s polling interval for guaranteed live progress updates
-  if (pollInterval) clearInterval(pollInterval);
-  pollInterval = setInterval(() => {
-    fetchDownloads();
-  }, 1000);
 }
+
+// Clean up SSE connection on page navigation/refresh to free up browser sockets
+window.addEventListener('beforeunload', () => {
+  disconnectSSE();
+});
 
 let eventSource = null;
 
@@ -250,7 +249,11 @@ async function handleDownloadSubmit(event) {
   }
 }
 
+let isFetchingDownloads = false;
+
 async function fetchDownloads() {
+  if (isFetchingDownloads) return;
+  isFetchingDownloads = true;
   try {
     const res = await fetch('/api/downloads');
     if (res.status === 401) {
@@ -262,19 +265,23 @@ async function fetchDownloads() {
     // Update Aria2 status badge
     const badge = document.getElementById('aria2StatusBadge');
     const badgeText = document.getElementById('aria2StatusText');
-    const dot = badge.querySelector('.status-dot');
+    const dot = badge ? badge.querySelector('.status-dot') : null;
 
-    if (data.aria2Connection && data.aria2Connection.online) {
-      dot.className = 'status-dot online';
-      badgeText.textContent = 'Aria2 RPC';
-    } else {
-      dot.className = 'status-dot offline';
-      badgeText.textContent = 'Aria2 Offline';
+    if (badge && dot) {
+      if (data.aria2Connection && data.aria2Connection.online) {
+        dot.className = 'status-dot online';
+        badgeText.textContent = 'Aria2 RPC';
+      } else {
+        dot.className = 'status-dot offline';
+        badgeText.textContent = 'Aria2 Offline';
+      }
     }
 
     renderActiveDownloads(data.downloads || []);
   } catch (err) {
     console.error('Error fetching downloads:', err);
+  } finally {
+    isFetchingDownloads = false;
   }
 }
 
@@ -527,7 +534,11 @@ async function cancelDownloadTask(gid) {
    FILE MANAGEMENT LEDGER
    ========================================================================== */
 
+let isFetchingFiles = false;
+
 async function fetchFiles() {
+  if (isFetchingFiles) return;
+  isFetchingFiles = true;
   try {
     const res = await fetch('/api/files');
     if (res.status === 401) {
@@ -536,15 +547,19 @@ async function fetchFiles() {
     }
     const data = await res.json();
     ledgerFiles = data.files || [];
+    updateTagFilterSelect();
     renderLedger();
     renderGallery();
   } catch (err) {
     console.error('Error fetching file ledger:', err);
+  } finally {
+    isFetchingFiles = false;
   }
 }
 
 let currentPage = 1;
-let pageSize = parseInt(localStorage.getItem('ledger_page_size') || '5', 10);
+let pageSize = parseInt(localStorage.getItem('ledger_page_size') || '10', 10);
+let activeTagFilter = 'ALL';
 
 function setFilter(filter, el) {
   activeFilter = filter;
@@ -555,10 +570,35 @@ function setFilter(filter, el) {
 }
 
 function changePageSize(val) {
-  pageSize = parseInt(val, 10) || 5;
+  pageSize = parseInt(val, 10) || 10;
   localStorage.setItem('ledger_page_size', pageSize);
   currentPage = 1;
   renderLedger();
+}
+
+function changeTagFilter(val) {
+  activeTagFilter = val;
+  currentPage = 1;
+  renderLedger();
+}
+
+function updateTagFilterSelect() {
+  const select = document.getElementById('tagFilterSelect');
+  if (!select) return;
+
+  const currentVal = select.value || 'ALL';
+  const allUniqueTags = Array.from(new Set(ledgerFiles.flatMap(f => f.tags || []).filter(Boolean)));
+
+  select.innerHTML = `<option value="ALL">All Tags</option>` + allUniqueTags.map(tag => `
+    <option value="${escapeHtml(tag)}">🏷️ ${escapeHtml(tag)}</option>
+  `).join('');
+
+  if (allUniqueTags.includes(currentVal)) {
+    select.value = currentVal;
+  } else {
+    select.value = 'ALL';
+    activeTagFilter = 'ALL';
+  }
 }
 
 function changePage(delta) {
@@ -643,13 +683,14 @@ function renderLedger() {
   // Filter items
   const filtered = ledgerFiles.filter(file => {
     const matchesFilter = activeFilter === 'ALL' || file.status === activeFilter;
+    const matchesTag = activeTagFilter === 'ALL' || (file.tags && file.tags.includes(activeTagFilter));
     const matchesSearch = !search ||
       file.filename.toLowerCase().includes(search) ||
       (file.custom_name && file.custom_name.toLowerCase().includes(search)) ||
       file.id.toLowerCase().includes(search) ||
       file.download_url.toLowerCase().includes(search) ||
       (file.tags && file.tags.some(t => t.toLowerCase().includes(search)));
-    return matchesFilter && matchesSearch;
+    return matchesFilter && matchesTag && matchesSearch;
   });
 
   const totalItems = filtered.length;
@@ -737,6 +778,13 @@ function renderLedger() {
         ? `<div class="file-specs-row" style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px;" title="File Specs (Size - Duration - Resolution)">📊 ${escapeHtml(specParts.join(' - '))}</div>`
         : '';
 
+      const thumbCount = file.thumbnail_count || (file.thumbnails ? file.thumbnails.length : 0);
+      const thumbSizeStr = file.thumbnail_size_formatted || (file.thumbnail_size_bytes ? formatBytes(file.thumbnail_size_bytes) : '');
+
+      const thumbStatsRow = thumbCount > 0
+        ? `<div class="file-thumb-stats-row" style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px;" title="Screenshot Frames Count & Disk Space Consumed">🖼️ ${thumbCount} images ${thumbSizeStr ? `- ${escapeHtml(thumbSizeStr)}` : ''}</div>`
+        : '';
+
       const thumbUrl = file.selected_thumbnail || ((file.thumbnails && file.thumbnails.length > 0) ? file.thumbnails[0] : null);
       const previewCellHTML = thumbUrl
         ? `<div class="table-thumb-box" id="tableCover_${file.id}" onclick="openGalleryModal('${file.id}')" title="Click to view screenshot gallery">
@@ -764,9 +812,10 @@ function renderLedger() {
             </div>
             ${methodRow}
             ${specsRow}
+            ${thumbStatsRow}
             <div style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px;">
               ${(file.tags && file.tags.length > 0)
-                ? file.tags.map(t => `<span style="background: rgba(0, 122, 255, 0.15); border: 1px solid rgba(0, 122, 255, 0.3); color: #60a5fa; font-size: 0.675rem; padding: 1px 6px; border-radius: 4px; font-family: var(--font-mono); font-weight: 600;">🏷️ ${escapeHtml(t)}</span>`).join('')
+                ? file.tags.map(t => `<span class="file-tag-pill">🏷️ ${escapeHtml(t)}<button type="button" class="tag-delete-btn" onclick="quickRemoveFileTag(event, '${file.id}', '${escapeHtml(t)}')" title="Remove tag">✕</button></span>`).join('')
                 : `<span style="font-size: 0.7rem; color: var(--text-muted); font-style: italic;">No tags</span>`
               }
               <button type="button" onclick="toggleQuickTagDropdown(event, '${file.id}')" style="background: rgba(0, 122, 255, 0.12); border: 1px solid rgba(0, 122, 255, 0.3); color: #60a5fa; font-size: 0.675rem; padding: 1px 6px; border-radius: 4px; cursor: pointer; transition: all 0.2s;" title="Quick Tag Menu">🏷️ +</button>
@@ -799,11 +848,11 @@ function renderLedger() {
               <div class="action-row">
                 <button class="btn-table-action success" onclick="triggerSingleTouch('${file.id}')" title="Ping Pixeldrain Link">⚡ Touch</button>
                 ${galleryBtn ? galleryBtn : `<button class="btn-table-action" disabled style="opacity: 0.3; cursor: not-allowed;">🖼️ N/A</button>`}
-                ${cat === 'video' ? `<a href="/watch?id=${file.id}" class="btn-table-action primary" style="text-decoration: none; text-align: center; font-weight: 700; background: linear-gradient(135deg, #007aff, #00c6ff); color: #fff;" title="Watch Video">▶️ Play</a>` : `<button class="btn-table-action danger" onclick="deleteRecord('${file.id}')" title="Delete Entry">🗑️ Delete</button>`}
+                <button class="btn-table-action danger" onclick="deleteRecord('${file.id}')" title="Delete Ledger Entry">🗑️ Delete</button>
               </div>
               ${cat === 'video' ? `
                 <div class="action-row">
-                  <button class="btn-table-action danger" onclick="deleteRecord('${file.id}')" title="Delete Ledger Entry" style="width: 100%;">🗑️ Delete File Entry</button>
+                  <a href="/watch?id=${file.id}" class="btn-table-action primary" style="width: 100%; text-decoration: none; text-align: center; font-weight: 700; background: linear-gradient(135deg, #007aff, #00c6ff); color: #fff; display: flex; align-items: center; justify-content: center; gap: 4px;" title="Watch Video Room">▶️ Play Video</a>
                 </div>
               ` : ''}
             </div>
@@ -1743,15 +1792,19 @@ async function quickToggleFileTag(tag) {
   if (!file) return;
 
   let currentTags = Array.isArray(file.tags) ? [...file.tags] : [];
+  let isAdded = false;
   if (currentTags.includes(tag)) {
     currentTags = currentTags.filter(t => t !== tag);
   } else {
     currentTags.push(tag);
+    isAdded = true;
   }
 
   file.tags = currentTags; // Optimistic update
   renderQuickTagList();
   renderLedger();
+
+  showToast(`🏷️ Tag "${tag}" ${isAdded ? 'added' : 'removed'} successfully`, 'success');
 
   try {
     const res = await fetch(`/api/files/${activeQuickTagFileId}`, {
@@ -1780,5 +1833,26 @@ function handleQuickTagInputKeydown(e) {
   if (e.key === 'Enter') {
     e.preventDefault();
     addQuickTagFromInput();
+  }
+}
+
+async function quickRemoveFileTag(e, fileId, tag) {
+  if (e) e.stopPropagation();
+  const file = ledgerFiles.find(f => f.id === fileId);
+  if (!file) return;
+
+  file.tags = (file.tags || []).filter(t => t !== tag);
+  renderLedger();
+  showToast(`🏷️ Tag "${tag}" removed successfully`, 'success');
+
+  try {
+    const res = await fetch(`/api/files/${fileId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: file.tags })
+    });
+    if (!res.ok) fetchFiles();
+  } catch (err) {
+    fetchFiles();
   }
 }

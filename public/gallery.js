@@ -148,14 +148,15 @@ function connectSSE() {
   };
 }
 
-function disconnectSSE() {
-  if (eventSource) {
-    eventSource.close();
-    eventSource = null;
-  }
-}
+window.addEventListener('beforeunload', () => {
+  disconnectSSE();
+});
+
+let isFetchingFiles = false;
 
 async function fetchFiles() {
+  if (isFetchingFiles) return;
+  isFetchingFiles = true;
   try {
     const res = await fetch('/api/files');
     if (res.status === 401) {
@@ -164,9 +165,53 @@ async function fetchFiles() {
     }
     const data = await res.json();
     ledgerFiles = data.files || [];
+    updateGalleryTagFilterSelect();
     renderGalleryPage();
   } catch (err) {
     console.error('Error fetching file ledger:', err);
+  } finally {
+    isFetchingFiles = false;
+  }
+}
+
+let galleryCurrentPage = 1;
+let galleryPageSize = parseInt(localStorage.getItem('gallery_page_size') || '12', 10);
+let activeGalleryTagFilter = 'ALL';
+
+function changeGalleryPageSize(val) {
+  galleryPageSize = parseInt(val, 10) || 12;
+  localStorage.setItem('gallery_page_size', galleryPageSize);
+  galleryCurrentPage = 1;
+  renderGalleryPage();
+}
+
+function changeGalleryTagFilter(val) {
+  activeGalleryTagFilter = val;
+  galleryCurrentPage = 1;
+  renderGalleryPage();
+}
+
+function changeGalleryPage(delta) {
+  galleryCurrentPage += delta;
+  renderGalleryPage();
+}
+
+function updateGalleryTagFilterSelect() {
+  const select = document.getElementById('galleryTagFilterSelect');
+  if (!select) return;
+
+  const currentVal = select.value || 'ALL';
+  const allUniqueTags = Array.from(new Set(ledgerFiles.flatMap(f => f.tags || []).filter(Boolean)));
+
+  select.innerHTML = `<option value="ALL">All Tags</option>` + allUniqueTags.map(tag => `
+    <option value="${escapeHtml(tag)}">🏷️ ${escapeHtml(tag)}</option>
+  `).join('');
+
+  if (allUniqueTags.includes(currentVal)) {
+    select.value = currentVal;
+  } else {
+    select.value = 'ALL';
+    activeGalleryTagFilter = 'ALL';
   }
 }
 
@@ -214,11 +259,18 @@ function renderGalleryPage() {
   const search = (searchInput ? searchInput.value : '').toLowerCase().trim();
   const sortVal = sortSelect ? sortSelect.value : 'newest';
 
+  // Synchronize Page Size Select UI
+  const pageSizeSelect = document.getElementById('galleryPageSizeSelect');
+  if (pageSizeSelect) pageSizeSelect.value = galleryPageSize;
+
   // Filter items
   let filtered = ledgerFiles.filter(file => {
-    return !search ||
+    const matchesTag = activeGalleryTagFilter === 'ALL' || (file.tags && file.tags.includes(activeGalleryTagFilter));
+    const matchesSearch = !search ||
       file.filename.toLowerCase().includes(search) ||
-      (file.custom_name && file.custom_name.toLowerCase().includes(search));
+      (file.custom_name && file.custom_name.toLowerCase().includes(search)) ||
+      (file.tags && file.tags.some(t => t.toLowerCase().includes(search)));
+    return matchesTag && matchesSearch;
   });
 
   // Sort items
@@ -239,7 +291,33 @@ function renderGalleryPage() {
     }
   });
 
-  if (filtered.length === 0) {
+  const totalItems = filtered.length;
+  const totalPages = Math.ceil(totalItems / galleryPageSize) || 1;
+
+  if (galleryCurrentPage < 1) galleryCurrentPage = 1;
+  if (galleryCurrentPage > totalPages) galleryCurrentPage = totalPages;
+
+  const startIndex = (galleryCurrentPage - 1) * galleryPageSize;
+  const pageItems = filtered.slice(startIndex, startIndex + galleryPageSize);
+
+  // Update Pagination Controls UI
+  const showingTextEl = document.getElementById('galleryShowingEntriesText');
+  if (showingTextEl) {
+    showingTextEl.textContent = totalItems === 0
+      ? 'Showing 0 entries'
+      : `Showing ${startIndex + 1} to ${Math.min(startIndex + galleryPageSize, totalItems)} of ${totalItems} entries`;
+  }
+
+  const pageInfoEl = document.getElementById('galleryPageInfo');
+  if (pageInfoEl) pageInfoEl.textContent = `Page ${galleryCurrentPage} of ${totalPages}`;
+
+  const btnPrev = document.getElementById('btnPrevGalleryPage');
+  if (btnPrev) btnPrev.disabled = galleryCurrentPage <= 1;
+
+  const btnNext = document.getElementById('btnNextGalleryPage');
+  if (btnNext) btnNext.disabled = galleryCurrentPage >= totalPages;
+
+  if (pageItems.length === 0) {
     container.innerHTML = '';
     if (emptyState) emptyState.classList.remove('hidden');
     return;
@@ -247,7 +325,7 @@ function renderGalleryPage() {
 
   if (emptyState) emptyState.classList.add('hidden');
 
-  container.innerHTML = filtered.map(file => {
+  container.innerHTML = pageItems.map(file => {
     const meta = file.metadata || {};
     const cat = meta.category || 'file';
     const catIcon = cat === 'video' ? '🎬' : cat === 'image' ? '🖼️' : cat === 'audio' ? '🎵' : cat === 'archive' ? '📦' : '📄';

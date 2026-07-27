@@ -143,7 +143,7 @@
             <input type="text" id="gallerySearchInput" oninput="renderGalleryPage()" placeholder="Search media by title or ID..." class="glow-input">
           </div>
 
-          <div style="display: flex; gap: 16px; margin-left: auto; flex-wrap: wrap;">
+          <div style="display: flex; gap: 12px; margin-left: auto; flex-wrap: wrap; align-items: center;">
             <div class="page-size-selector">
               <label for="galleryGridColsSelect">Grid:</label>
               <select id="galleryGridColsSelect" onchange="changeGridColumns(this.value)" class="glow-input">
@@ -152,6 +152,22 @@
                 <option value="4" selected>4 Grid</option>
                 <option value="5">5 Grid</option>
                 <option value="6">6 Grid</option>
+              </select>
+            </div>
+
+            <div class="page-size-selector">
+              <label for="galleryTagFilterSelect">Tag:</label>
+              <select id="galleryTagFilterSelect" onchange="changeGalleryTagFilter(this.value)" class="glow-input">
+                <option value="ALL">All Tags</option>
+              </select>
+            </div>
+
+            <div class="page-size-selector">
+              <label for="galleryPageSizeSelect">Show:</label>
+              <select id="galleryPageSizeSelect" onchange="changeGalleryPageSize(this.value)" class="glow-input">
+                <option value="12" selected>12</option>
+                <option value="24">24</option>
+                <option value="36">36</option>
               </select>
             </div>
 
@@ -179,6 +195,16 @@
 
         <div id="galleryEmptyState" class="empty-state hidden" style="margin-top: 24px; padding: 40px;">
           <span style="font-size: 1rem; color: var(--text-muted);">No media files or screenshot frames found matching your filters.</span>
+        </div>
+
+        <!-- Gallery Bottom Pagination Bar -->
+        <div class="pagination-bar-bottom flex-between" style="margin-top: 24px;">
+          <span id="galleryShowingEntriesText" class="section-desc">Showing 0 to 0 of 0 entries</span>
+          <div class="page-nav-buttons">
+            <button class="btn-page-nav" id="btnPrevGalleryPage" onclick="changeGalleryPage(-1)">❮ Prev</button>
+            <span id="galleryPageInfo" class="page-info-text">Page 1 of 1</span>
+            <button class="btn-page-nav" id="btnNextGalleryPage" onclick="changeGalleryPage(1)">Next ❯</button>
+          </div>
         </div>
       </section>
 

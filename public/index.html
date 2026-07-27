@@ -241,6 +241,13 @@
               </select>
             </div>
 
+            <div class="page-size-selector">
+              <label for="tagFilterSelect">Tag:</label>
+              <select id="tagFilterSelect" onchange="changeTagFilter(this.value)">
+                <option value="ALL">All Tags</option>
+              </select>
+            </div>
+
             <div class="page-nav-buttons">
               <button class="btn-page-nav" id="btnPrevPageTop" onclick="changePage(-1)" title="Previous Page">❮</button>
               <span id="pageInfoTop" class="page-info-text">Page 1 of 1</span>

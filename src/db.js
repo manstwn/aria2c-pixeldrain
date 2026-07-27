@@ -25,6 +25,14 @@ function initStorage() {
 
 const metadataModule = require('./metadata');
 
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
 function getAllFiles() {
   initStorage();
   try {
@@ -47,6 +55,22 @@ function getAllFiles() {
           duration_formatted: ''
         };
       }
+
+      // Calculate total thumbnail count & consumed disk size
+      let totalThumbBytes = 0;
+      const thumbs = file.thumbnails || [];
+      thumbs.forEach(thumbRelPath => {
+        try {
+          const absolutePath = path.join(__dirname, '..', thumbRelPath);
+          if (fs.existsSync(absolutePath)) {
+            totalThumbBytes += fs.statSync(absolutePath).size;
+          }
+        } catch (e) {}
+      });
+      file.thumbnail_count = thumbs.length;
+      file.thumbnail_size_bytes = totalThumbBytes;
+      file.thumbnail_size_formatted = formatBytes(totalThumbBytes);
+
       return file;
     });
   } catch (err) {
