@@ -288,13 +288,21 @@ function renderGalleryPage() {
       `;
     }
 
-    // Metadata string values
     let sizeStr = 'N/A';
     if (meta.size_formatted && meta.size_formatted !== 'N/A') {
       sizeStr = escapeHtml(meta.size_formatted);
     } else if (meta.size_bytes > 0) {
       sizeStr = formatBytes(meta.size_bytes);
     }
+
+    const specParts = [];
+    if (sizeStr && sizeStr !== 'N/A') specParts.push(sizeStr);
+    if (durationText) specParts.push(durationText);
+    if (meta.resolution) specParts.push(meta.resolution);
+
+    const specsLineHTML = specParts.length > 0
+      ? `<div class="gallery-specs-line">${escapeHtml(specParts.join(' - '))}</div>`
+      : '';
 
     return `
       <div class="gallery-item-card">
@@ -305,22 +313,7 @@ function renderGalleryPage() {
             <span class="name-text" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span>
           </div>
 
-          <div class="gallery-specs-grid">
-            <div class="spec-item">
-              <span class="spec-label">Size:</span>
-              <span class="spec-value">${sizeStr}</span>
-            </div>
-            <div class="spec-item">
-              <span class="spec-label">Duration:</span>
-              <span class="spec-value">${escapeHtml(durationText) || 'N/A'}</span>
-            </div>
-            ${meta.resolution ? `
-              <div class="spec-item" style="grid-column: span 2;">
-                <span class="spec-label">Res:</span>
-                <span class="spec-value">${escapeHtml(meta.resolution)}</span>
-              </div>
-            ` : ''}
-          </div>
+          ${specsLineHTML}
 
           ${file.download_url ? `
             <div class="gofile-link-badge" style="max-width: 100%;">
