@@ -295,12 +295,29 @@ app.get('/api/files', auth.requireAuth, (req, res) => {
 app.patch('/api/files/:id', auth.requireAuth, (req, res) => {
   try {
     const { id } = req.params;
-    const { custom_name } = req.body;
-    if (custom_name === undefined) {
-      return res.status(400).json({ error: 'custom_name is required' });
+    const existing = db.getFileById(id);
+    if (!existing) return res.status(404).json({ error: 'File not found' });
+
+    const { custom_name, status, download_url, category, selected_thumbnail, tags, engine } = req.body;
+    const updateData = {};
+
+    if (custom_name !== undefined) updateData.custom_name = custom_name.trim();
+    if (status !== undefined) updateData.status = status;
+    if (download_url !== undefined) updateData.download_url = download_url.trim();
+    if (selected_thumbnail !== undefined) updateData.selected_thumbnail = selected_thumbnail;
+    if (engine !== undefined) updateData.engine = engine;
+    if (tags !== undefined) {
+      updateData.tags = Array.isArray(tags) ? tags : String(tags).split(',').map(t => t.trim()).filter(Boolean);
     }
-    const updated = db.updateFile(id, { custom_name: custom_name.trim() });
-    if (!updated) return res.status(404).json({ error: 'File not found' });
+
+    if (category !== undefined) {
+      updateData.metadata = {
+        ...(existing.metadata || {}),
+        category: category
+      };
+    }
+
+    const updated = db.updateFile(id, updateData);
     res.json({ success: true, file: updated });
   } catch (err) {
     res.status(500).json({ error: err.message });

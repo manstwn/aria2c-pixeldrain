@@ -176,8 +176,14 @@ async function fetchFiles() {
 
 function changeGridColumns(cols) {
   const container = document.getElementById('galleryGridContainer');
+  const numCols = parseInt(cols, 10) || 4;
   if (container) {
-    container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    container.style.gridTemplateColumns = `repeat(${numCols}, 1fr)`;
+    if (numCols >= 4) {
+      container.classList.add('compact-mode');
+    } else {
+      container.classList.remove('compact-mode');
+    }
   }
   localStorage.setItem('gallery_grid_cols', cols);
 }
@@ -198,7 +204,7 @@ function renderGalleryPage() {
   // Restore or set grid columns selection
   const gridSelect = document.getElementById('galleryGridColsSelect');
   if (gridSelect && gridSelect.value) {
-    container.style.gridTemplateColumns = `repeat(${gridSelect.value}, 1fr)`;
+    changeGridColumns(gridSelect.value);
   }
 
   // Update Summary Counters
@@ -268,8 +274,6 @@ function renderGalleryPage() {
       coverHTML = `
         <div class="gallery-card-cover"
              id="coverDiv_${file.id}"
-             onmouseenter="startHoverSlideshow(event, '${file.id}')"
-             onmouseleave="stopHoverSlideshow(event, '${file.id}')"
              onclick="openGalleryModal('${file.id}')">
           <div class="cover-layer layer-bg" id="layerBg_${file.id}" style="background-image: url('${escapeHtml(thumbUrl)}');"></div>
           <div class="cover-layer layer-fg" id="layerFg_${file.id}" style="background-image: url('${escapeHtml(thumbUrl)}'); opacity: 0;"></div>
@@ -305,7 +309,10 @@ function renderGalleryPage() {
       : '';
 
     return `
-      <div class="gallery-item-card">
+      <div class="gallery-item-card"
+           id="card_${file.id}"
+           onmouseenter="startHoverSlideshow(event, '${file.id}')"
+           onmouseleave="stopHoverSlideshow(event, '${file.id}')">
         ${coverHTML}
         <div class="gallery-card-body">
           <div class="gallery-card-title">
@@ -395,8 +402,8 @@ function startHoverSlideshow(evt, fileId) {
 }
 
 function stopHoverSlideshow(evt, fileId) {
-  const coverDiv = document.getElementById(`coverDiv_${fileId}`);
-  if (evt && evt.relatedTarget && coverDiv && coverDiv.contains(evt.relatedTarget)) {
+  const cardEl = document.getElementById(`card_${fileId}`) || document.getElementById(`coverDiv_${fileId}`);
+  if (evt && evt.relatedTarget && cardEl && cardEl.contains(evt.relatedTarget)) {
     return;
   }
 

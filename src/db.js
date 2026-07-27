@@ -89,6 +89,7 @@ function addFile(record) {
     created_at: record.created_at || now,
     last_touched: record.last_touched || now,
     status: record.status || 'LIVE',
+    tags: Array.isArray(record.tags) ? record.tags : [],
     metadata: record.metadata || null,
     thumbnails: thumbs,
     selected_thumbnail: record.selected_thumbnail || defaultThumb

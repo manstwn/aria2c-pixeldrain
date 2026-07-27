@@ -544,7 +544,7 @@ async function fetchFiles() {
 }
 
 let currentPage = 1;
-let pageSize = 25;
+let pageSize = parseInt(localStorage.getItem('ledger_page_size') || '5', 10);
 
 function setFilter(filter, el) {
   activeFilter = filter;
@@ -555,7 +555,8 @@ function setFilter(filter, el) {
 }
 
 function changePageSize(val) {
-  pageSize = parseInt(val, 10) || 25;
+  pageSize = parseInt(val, 10) || 5;
+  localStorage.setItem('ledger_page_size', pageSize);
   currentPage = 1;
   renderLedger();
 }
@@ -644,8 +645,10 @@ function renderLedger() {
     const matchesFilter = activeFilter === 'ALL' || file.status === activeFilter;
     const matchesSearch = !search ||
       file.filename.toLowerCase().includes(search) ||
+      (file.custom_name && file.custom_name.toLowerCase().includes(search)) ||
       file.id.toLowerCase().includes(search) ||
-      file.download_url.toLowerCase().includes(search);
+      file.download_url.toLowerCase().includes(search) ||
+      (file.tags && file.tags.some(t => t.toLowerCase().includes(search)));
     return matchesFilter && matchesSearch;
   });
 
@@ -692,6 +695,9 @@ function renderLedger() {
 
   emptyState.classList.add('hidden');
 
+  const pageSelect = document.getElementById('pageSizeSelect');
+  if (pageSelect) pageSelect.value = pageSize;
+
   // 1. Render Desktop Table Rows
   if (tbody) {
     tbody.innerHTML = pageItems.map(file => {
@@ -710,16 +716,15 @@ function renderLedger() {
       const catIcon = cat === 'video' ? '🎬' : cat === 'image' ? '🖼️' : cat === 'audio' ? '🎵' : cat === 'archive' ? '📦' : '📄';
 
       const displayName = file.custom_name || file.filename;
-      const originalName = file.original_filename || file.filename;
-
-      const originalRow = (originalName && originalName !== displayName)
-        ? `<div class="original-name-row" title="Original Download Filename">📁 Original: ${escapeHtml(originalName)}</div>`
-        : '';
+      const methodStr = file.engine || file.method || (file.metadata && file.metadata.engine) || 'aria2c';
+      const methodRow = `<div class="method-name-row" style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px;" title="Download Method">⚡ Method: ${escapeHtml(methodStr)}</div>`;
 
       const thumbUrl = file.selected_thumbnail || ((file.thumbnails && file.thumbnails.length > 0) ? file.thumbnails[0] : null);
       const previewCellHTML = thumbUrl
-        ? `<div class="table-thumb-box" onclick="openGalleryModal('${file.id}')" title="Click to view screenshot gallery">
-             <img src="${escapeHtml(thumbUrl)}" alt="Thumbnail Preview" />
+        ? `<div class="table-thumb-box" id="tableCover_${file.id}" onclick="openGalleryModal('${file.id}')" title="Click to view screenshot gallery">
+             <div class="cover-layer layer-bg" id="tableLayerBg_${file.id}" style="background-image: url('${escapeHtml(thumbUrl)}');"></div>
+             <div class="cover-layer layer-fg" id="tableLayerFg_${file.id}" style="background-image: url('${escapeHtml(thumbUrl)}'); opacity: 0;"></div>
+             <span class="cover-small-dot"></span>
            </div>`
         : `<div class="table-thumb-box fallback" title="No thumbnail available">
              <span>${catIcon}</span>
@@ -730,50 +735,59 @@ function renderLedger() {
         : '';
 
       return `
-        <tr>
+        <tr id="tableRow_${file.id}"
+            onmouseenter="startTableHoverSlideshow(event, '${file.id}')"
+            onmouseleave="stopTableHoverSlideshow(event, '${file.id}')">
           <td>${previewCellHTML}</td>
           <td class="filename-cell">
-            <div class="file-title-row">
+            <div class="file-title-row" style="margin-bottom: 4px;">
               <span class="cat-icon">${catIcon}</span>
-              <span
-                class="file-name-text editable-name"
-                contenteditable="true"
-                spellcheck="false"
-                title="Click to edit display name"
-                data-file-id="${file.id}"
-                data-original-value="${escapeHtml(displayName)}"
-                onblur="saveCustomName(this)"
-                onkeydown="handleNameKeydown(event, this)"
-              >${escapeHtml(displayName)}</span>
+              <span class="file-name-text" style="font-weight: 700; color: var(--text-primary);" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span>
             </div>
-            ${originalRow}
-          </td>
-          <td class="link-cell">
+            ${methodRow}
+            ${(file.tags && file.tags.length > 0) ? `
+              <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">
+                ${file.tags.map(t => `<span style="background: rgba(0, 122, 255, 0.12); border: 1px solid rgba(0, 122, 255, 0.25); color: #60a5fa; font-size: 0.675rem; padding: 1px 6px; border-radius: 4px; font-family: var(--font-mono);">🏷️ ${escapeHtml(t)}</span>`).join('')}
+              </div>
+            ` : ''}
             ${file.download_url ? `
-              <div class="gofile-link-badge">
+              <div class="gofile-link-badge" style="margin-top: 6px; max-width: 100%;">
                 <a href="${escapeHtml(file.download_url)}" target="_blank" rel="noopener">${escapeHtml(file.download_url)}</a>
                 <button class="btn-copy-mini" onclick="copyToClipboard('${escapeHtml(file.download_url)}')" title="Copy Pixeldrain Link">📋</button>
               </div>
-            ` : '<span class="text-muted">N/A</span>'}
+            ` : '<div style="margin-top: 4px;"><span class="text-muted" style="font-size: 0.775rem;">N/A</span></div>'}
           </td>
-          <td>${statusBadge}</td>
-          <td><small class="utc-date-text" title="UTC: ${escapeHtml(lastTouchedUTC)}">${escapeHtml(lastTouchedRel)}</small></td>
+          <td class="status-cell">
+            <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
+              ${statusBadge}
+              <div style="font-size: 0.775rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px;" title="UTC: ${escapeHtml(lastTouchedUTC)}">
+                Touched: ${escapeHtml(lastTouchedRel)}
+              </div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);" title="Created UTC: ${escapeHtml(createdAtUTC)}">
+                Age: ${escapeHtml(createdAtRel)}
+              </div>
+            </div>
+          </td>
           <td class="text-right">
             <div class="action-buttons-stack">
               <div class="action-row">
-                <button class="btn-table-action primary" onclick="showFileMetadata('${file.id}')" title="View Full File Metadata">🔍 Meta</button>
-                <button class="btn-table-action" onclick="copyToClipboard('${escapeHtml(file.download_url)}')" title="Copy Link">📋 Copy</button>
+                <button class="btn-table-action primary" onclick="openEditModal('${file.id}')" title="Edit File Details & Choose Cover Frame">✏️ Edit</button>
+                <button class="btn-table-action" onclick="showFileMetadata('${file.id}')" title="View Full File Metadata">🔍 Meta</button>
+                <button class="btn-table-action" onclick="copyToClipboard('${escapeHtml(file.download_url)}')" title="Copy Pixeldrain Link">📋 Copy</button>
               </div>
               <div class="action-row">
                 <button class="btn-table-action success" onclick="triggerSingleTouch('${file.id}')" title="Ping Pixeldrain Link">⚡ Touch</button>
                 ${galleryBtn ? galleryBtn : `<button class="btn-table-action" disabled style="opacity: 0.3; cursor: not-allowed;">🖼️ N/A</button>`}
+                ${cat === 'video' ? `<a href="/watch?id=${file.id}" class="btn-table-action primary" style="text-decoration: none; text-align: center; font-weight: 700; background: linear-gradient(135deg, #007aff, #00c6ff); color: #fff;" title="Watch Video">▶️ Play</a>` : `<button class="btn-table-action danger" onclick="deleteRecord('${file.id}')" title="Delete Entry">🗑️ Delete</button>`}
               </div>
-              ${cat === 'video' ? `<a href="/watch?id=${file.id}" class="btn-table-action primary" style="width: 100%; text-decoration: none; text-align: center; font-weight: 700; background: linear-gradient(135deg, #007aff, #00c6ff); color: #fff;" title="Watch Video">▶️ Play Video</a>` : ''}
-              <button class="btn-table-action danger" onclick="deleteRecord('${file.id}')" title="Delete Ledger Entry" style="width: 100%;">🗑️ Delete</button>
+              ${cat === 'video' ? `
+                <div class="action-row">
+                  <button class="btn-table-action danger" onclick="deleteRecord('${file.id}')" title="Delete Ledger Entry" style="width: 100%;">🗑️ Delete File Entry</button>
+                </div>
+              ` : ''}
             </div>
           </td>
         </tr>
-
       `;
     }).join('');
   }
@@ -828,15 +842,7 @@ function renderLedger() {
             <div class="card-title-container">
               <div style="font-weight: 700; font-size: 0.95rem; display: flex; align-items: flex-start; gap: 6px; min-width: 0;">
                 <span style="flex-shrink: 0; line-height: 1.4;">${catIcon}</span>
-                <span
-                  class="editable-name"
-                  contenteditable="true"
-                  spellcheck="false"
-                  data-file-id="${file.id}"
-                  data-original-value="${escapeHtml(displayName)}"
-                  onblur="saveCustomName(this)"
-                  onkeydown="handleNameKeydown(event, this)"
-                >${escapeHtml(displayName)}</span>
+                <span style="font-weight: 700; color: var(--text-primary);" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span>
               </div>
               ${originalRow}
             </div>
@@ -1377,4 +1383,265 @@ function renderGallery() {
       </div>
     `;
   }).join('');
+}
+
+/* ==========================================================================
+   EDIT FILE DATA & SCREENSHOT COVER MODAL
+   ========================================================================== */
+
+let currentEditFileId = null;
+let currentSelectedEditThumb = null;
+let currentEditTags = [];
+
+function openEditModal(fileId) {
+  const file = ledgerFiles.find(f => f.id === fileId);
+  if (!file) return;
+
+  currentEditFileId = fileId;
+  const meta = file.metadata || {};
+
+  const fileIdInput = document.getElementById('editFileId');
+  const nameInput = document.getElementById('editCustomName');
+  const catSelect = document.getElementById('editCategory');
+  const statusSelect = document.getElementById('editStatus');
+  const engineSelect = document.getElementById('editEngine');
+  const urlInput = document.getElementById('editDownloadUrl');
+
+  if (fileIdInput) fileIdInput.value = file.id;
+  if (nameInput) nameInput.value = file.custom_name || file.filename;
+  if (catSelect) catSelect.value = meta.category || 'other';
+  if (statusSelect) statusSelect.value = file.status || 'LIVE';
+  if (engineSelect) engineSelect.value = file.engine || file.method || (meta.engine) || 'aria2c';
+  if (urlInput) urlInput.value = file.download_url || '';
+
+  currentSelectedEditThumb = file.selected_thumbnail || ((file.thumbnails && file.thumbnails.length > 0) ? file.thumbnails[0] : null);
+
+  // Initialize Tags
+  currentEditTags = Array.isArray(file.tags) ? [...file.tags] : [];
+  const tagInput = document.getElementById('editTagInput');
+  if (tagInput) tagInput.value = '';
+  renderEditTags();
+  renderAvailableTagsPicker();
+
+  // Render Frame Screenshot Gallery Picker in Edit Modal
+  const pickerContainer = document.getElementById('editGalleryPicker');
+  if (pickerContainer) {
+    if (file.thumbnails && file.thumbnails.length > 0) {
+      pickerContainer.innerHTML = file.thumbnails.map((url, idx) => {
+        const isSelected = url === currentSelectedEditThumb;
+        return `
+          <div class="thumb-card ${isSelected ? 'active-picker' : ''}"
+               onclick="selectEditCoverFrame('${escapeHtml(url)}')"
+               style="cursor: pointer; position: relative; border-radius: 4px; overflow: hidden; border: 2px solid ${isSelected ? '#007aff' : 'rgba(255,255,255,0.1)'}; aspect-ratio: 16/9; ${isSelected ? 'box-shadow: 0 0 10px rgba(0,122,255,0.6);' : ''}">
+            <img src="${escapeHtml(url)}" style="width: 100%; height: 100%; object-fit: cover;" alt="Frame ${idx + 1}" />
+            <span style="position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,0.85); color: white; font-size: 0.6rem; padding: 1px 4px; border-radius: 2px; font-family: var(--font-mono);">#${idx + 1}</span>
+          </div>
+        `;
+      }).join('');
+    } else {
+      pickerContainer.innerHTML = `<div style="grid-column: 1 / -1; padding: 12px; text-align: center; color: var(--text-muted); font-size: 0.8rem;">No screenshot frames available for this file.</div>`;
+    }
+  }
+
+  const modal = document.getElementById('editDataModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function renderEditTags() {
+  const container = document.getElementById('editTagsContainer');
+  if (!container) return;
+
+  if (currentEditTags.length === 0) {
+    container.innerHTML = `<span style="color: var(--text-muted); font-size: 0.75rem; font-style: italic;">No tags added yet</span>`;
+    return;
+  }
+
+  container.innerHTML = currentEditTags.map(tag => `
+    <span class="tag-chip" style="background: rgba(0, 122, 255, 0.2); border: 1px solid rgba(0, 122, 255, 0.4); color: #60a5fa; padding: 2px 8px; border-radius: var(--radius-full); font-size: 0.75rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+      🏷️ ${escapeHtml(tag)}
+      <button type="button" onclick="removeEditTag('${escapeHtml(tag)}')" style="background: none; border: none; color: #f43f5e; cursor: pointer; font-size: 0.8rem; line-height: 1; padding: 0 2px;">✕</button>
+    </span>
+  `).join('');
+}
+
+function renderAvailableTagsPicker() {
+  const container = document.getElementById('availableTagsPicker');
+  if (!container) return;
+
+  // Aggregate all unique tags from all ledger files
+  const allUniqueTags = Array.from(new Set(ledgerFiles.flatMap(f => f.tags || []).filter(Boolean)));
+
+  if (allUniqueTags.length === 0) {
+    container.innerHTML = `<span style="color: var(--text-muted); font-size: 0.75rem; font-style: italic;">No tags created in any files yet</span>`;
+    return;
+  }
+
+  container.innerHTML = allUniqueTags.map(tag => {
+    const isAdded = currentEditTags.includes(tag);
+    return `
+      <span onclick="toggleAvailableTag('${escapeHtml(tag)}')"
+            style="cursor: pointer; padding: 3px 10px; border-radius: var(--radius-full); font-size: 0.75rem; font-weight: 600; font-family: var(--font-mono); transition: all 0.2s ease; ${isAdded ? 'background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399;' : 'background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-stroke); color: var(--text-muted);'}">
+        ${isAdded ? '✓' : '+'} ${escapeHtml(tag)}
+      </span>
+    `;
+  }).join('');
+}
+
+function addTagFromInput() {
+  const input = document.getElementById('editTagInput');
+  if (!input) return;
+  const tagVal = input.value.trim().toLowerCase();
+  if (tagVal && !currentEditTags.includes(tagVal)) {
+    currentEditTags.push(tagVal);
+    input.value = '';
+    renderEditTags();
+    renderAvailableTagsPicker();
+  }
+}
+
+function handleTagInputKeydown(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    addTagFromInput();
+  }
+}
+
+function removeEditTag(tag) {
+  currentEditTags = currentEditTags.filter(t => t !== tag);
+  renderEditTags();
+  renderAvailableTagsPicker();
+}
+
+function toggleAvailableTag(tag) {
+  if (currentEditTags.includes(tag)) {
+    removeEditTag(tag);
+  } else {
+    currentEditTags.push(tag);
+    renderEditTags();
+    renderAvailableTagsPicker();
+  }
+}
+
+function selectEditCoverFrame(url) {
+  currentSelectedEditThumb = url;
+  const file = ledgerFiles.find(f => f.id === currentEditFileId);
+  if (!file) return;
+
+  const pickerContainer = document.getElementById('editGalleryPicker');
+  if (pickerContainer && file.thumbnails) {
+    pickerContainer.innerHTML = file.thumbnails.map((tUrl, idx) => {
+      const isSelected = tUrl === currentSelectedEditThumb;
+      return `
+        <div class="thumb-card ${isSelected ? 'active-picker' : ''}"
+             onclick="selectEditCoverFrame('${escapeHtml(tUrl)}')"
+             style="cursor: pointer; position: relative; border-radius: 4px; overflow: hidden; border: 2px solid ${isSelected ? '#007aff' : 'rgba(255,255,255,0.1)'}; aspect-ratio: 16/9; ${isSelected ? 'box-shadow: 0 0 10px rgba(0,122,255,0.6);' : ''}">
+          <img src="${escapeHtml(tUrl)}" style="width: 100%; height: 100%; object-fit: cover;" alt="Frame ${idx + 1}" />
+          <span style="position: absolute; bottom: 2px; right: 2px; background: rgba(0,0,0,0.85); color: white; font-size: 0.6rem; padding: 1px 4px; border-radius: 2px; font-family: var(--font-mono);">#${idx + 1}</span>
+        </div>
+      `;
+    }).join('');
+  }
+}
+
+function closeEditModal() {
+  const modal = document.getElementById('editDataModal');
+  if (modal) modal.classList.add('hidden');
+  currentEditFileId = null;
+  currentSelectedEditThumb = null;
+  currentEditTags = [];
+}
+
+async function handleEditFormSubmit(e) {
+  e.preventDefault();
+  if (!currentEditFileId) return;
+
+  const customName = document.getElementById('editCustomName').value.trim();
+  const category = document.getElementById('editCategory').value;
+  const status = document.getElementById('editStatus').value;
+  const engine = document.getElementById('editEngine') ? document.getElementById('editEngine').value : 'aria2c';
+  const downloadUrl = document.getElementById('editDownloadUrl').value.trim();
+
+  try {
+    const res = await fetch(`/api/files/${currentEditFileId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        custom_name: customName,
+        category: category,
+        status: status,
+        engine: engine,
+        download_url: downloadUrl,
+        selected_thumbnail: currentSelectedEditThumb,
+        tags: currentEditTags
+      })
+    });
+
+    if (res.ok) {
+      showToast('File details updated successfully', 'success');
+      closeEditModal();
+      fetchFiles();
+    } else {
+      const data = await res.json();
+      showToast(data.error || 'Failed to update file', 'error');
+    }
+  } catch (err) {
+    showToast('Failed to connect to server', 'error');
+  }
+}
+
+/* ==========================================================================
+   DESKTOP TABLE ROW HOVER SCREENSHOT SLIDESHOW
+   ========================================================================== */
+
+const tableHoverIntervals = {};
+
+function startTableHoverSlideshow(evt, fileId) {
+  const file = ledgerFiles.find(f => f.id === fileId);
+  if (!file || !file.thumbnails || file.thumbnails.length <= 1) return;
+
+  stopTableHoverSlideshow(evt, fileId);
+
+  let frameIdx = 0;
+  let activeLayer = 'bg';
+
+  tableHoverIntervals[fileId] = setInterval(() => {
+    frameIdx = (frameIdx + 1) % file.thumbnails.length;
+    const nextUrl = file.thumbnails[frameIdx];
+    const layerBg = document.getElementById(`tableLayerBg_${fileId}`);
+    const layerFg = document.getElementById(`tableLayerFg_${fileId}`);
+
+    if (layerBg && layerFg && nextUrl) {
+      if (activeLayer === 'bg') {
+        layerFg.style.backgroundImage = `url("${nextUrl}")`;
+        layerFg.style.opacity = '1';
+        activeLayer = 'fg';
+      } else {
+        layerBg.style.backgroundImage = `url("${nextUrl}")`;
+        layerFg.style.opacity = '0';
+        activeLayer = 'bg';
+      }
+    }
+  }, 650);
+}
+
+function stopTableHoverSlideshow(evt, fileId) {
+  const rowEl = document.getElementById(`tableRow_${fileId}`);
+  if (evt && evt.relatedTarget && rowEl && rowEl.contains(evt.relatedTarget)) {
+    return;
+  }
+
+  if (tableHoverIntervals[fileId]) {
+    clearInterval(tableHoverIntervals[fileId]);
+    delete tableHoverIntervals[fileId];
+  }
+
+  const file = ledgerFiles.find(f => f.id === fileId);
+  const defaultThumb = file ? (file.selected_thumbnail || (file.thumbnails && file.thumbnails.length > 0 ? file.thumbnails[0] : '')) : '';
+  const layerBg = document.getElementById(`tableLayerBg_${fileId}`);
+  const layerFg = document.getElementById(`tableLayerFg_${fileId}`);
+
+  if (layerBg && layerFg && defaultThumb) {
+    layerBg.style.backgroundImage = `url("${defaultThumb}")`;
+    layerFg.style.opacity = '0';
+  }
 }

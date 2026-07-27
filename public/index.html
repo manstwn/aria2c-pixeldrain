@@ -234,10 +234,10 @@
             <div class="page-size-selector">
               <label for="pageSizeSelect">Show:</label>
               <select id="pageSizeSelect" onchange="changePageSize(this.value)">
-                <option value="10">10</option>
-                <option value="25" selected>25</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
+                <option value="10" selected>10</option>
+                <option value="15">15</option>
+                <option value="20">20</option>
+                <option value="25">25</option>
               </select>
             </div>
 
@@ -254,12 +254,10 @@
           <table class="ledger-table">
             <thead>
               <tr>
-                <th style="width: 145px;">Preview</th>
-                <th>Filename</th>
-                <th>Pixeldrain Link</th>
-                <th>Status</th>
-                <th>Last Touched</th>
-                <th class="text-right" style="width: 150px;">Actions</th>
+                <th style="width: 255px;">Preview</th>
+                <th style="width: 40%;">File</th>
+                <th style="width: 22%;">Status</th>
+                <th class="text-right" style="width: 285px;">Actions</th>
               </tr>
             </thead>
             <tbody id="ledgerTableBody">
@@ -363,6 +361,105 @@
       <div id="galleryThumbStrip" class="gallery-thumb-strip">
         <!-- Rendered dynamically -->
       </div>
+    </div>
+  </div>
+
+  <!-- EDIT DATA & COVER FRAME MODAL -->
+  <div id="editDataModal" class="auth-overlay hidden" onclick="if(event.target===this) closeEditModal()">
+    <div class="auth-card glass-panel" style="max-width: 800px; width: 95vw; text-align: left; padding: 24px; max-height: 90vh; overflow-y: auto;">
+      <div class="flex-between" style="margin-bottom: 16px; border-bottom: 1px solid var(--glass-stroke); padding-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.5rem;">✏️</span>
+          <div>
+            <h3 style="font-size: 1.1rem; font-weight: 700;">Edit File Entry</h3>
+            <span class="section-desc">Modify file details and choose primary cover thumbnail</span>
+          </div>
+        </div>
+        <button class="icon-btn" onclick="closeEditModal()" title="Close">✕</button>
+      </div>
+
+      <!-- EDIT FORM FIELDS -->
+      <form id="editDataForm" onsubmit="handleEditFormSubmit(event)" style="display: flex; flex-direction: column; gap: 14px;">
+        <input type="hidden" id="editFileId" />
+
+        <div>
+          <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; display: block;">Display Name / Title</label>
+          <input type="text" id="editCustomName" class="form-input" style="width: 100%; background: var(--bg-surface-container-highest); border: 1px solid var(--glass-stroke); padding: 8px 12px; border-radius: var(--radius-md); color: var(--text-primary); outline: none;" placeholder="File title..." required />
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+          <div>
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; display: block;">Category</label>
+            <select id="editCategory" class="form-input" style="width: 100%; background: var(--bg-surface-container-highest); border: 1px solid var(--glass-stroke); padding: 8px 12px; border-radius: var(--radius-md); color: var(--text-primary); outline: none;">
+              <option value="video">🎬 Video</option>
+              <option value="image">🖼️ Image</option>
+              <option value="audio">🎵 Audio</option>
+              <option value="archive">📦 Archive</option>
+              <option value="other">📄 Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; display: block;">Status</label>
+            <select id="editStatus" class="form-input" style="width: 100%; background: var(--bg-surface-container-highest); border: 1px solid var(--glass-stroke); padding: 8px 12px; border-radius: var(--radius-md); color: var(--text-primary); outline: none;">
+              <option value="LIVE">🟢 LIVE</option>
+              <option value="DEAD">🔴 DEAD</option>
+            </select>
+          </div>
+
+          <div>
+            <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; display: block;">Method</label>
+            <select id="editEngine" class="form-input" style="width: 100%; background: var(--bg-surface-container-highest); border: 1px solid var(--glass-stroke); padding: 8px 12px; border-radius: var(--radius-md); color: var(--text-primary); outline: none;">
+              <option value="aria2c">⚡ aria2c</option>
+              <option value="yt-dlp">🎬 yt-dlp</option>
+              <option value="direct">🌐 direct</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; display: block;">Pixeldrain Link / URL</label>
+          <input type="text" id="editDownloadUrl" class="form-input" style="width: 100%; background: var(--bg-surface-container-highest); border: 1px solid var(--glass-stroke); padding: 8px 12px; border-radius: var(--radius-md); color: var(--text-primary); outline: none; font-family: var(--font-mono);" placeholder="https://pixeldrain.com/u/..." />
+        </div>
+
+        <!-- TAGS INPUT & AVAILABLE TAGS PICKER -->
+        <div>
+          <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; display: block;">File Tags</label>
+          
+          <!-- Active Selected Tags -->
+          <div id="editTagsContainer" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; min-height: 32px; padding: 4px 8px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--glass-stroke); border-radius: var(--radius-md); align-items: center;">
+            <!-- Active tag chips rendered here -->
+          </div>
+
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="editTagInput" class="form-input" style="flex: 1; background: var(--bg-surface-container-highest); border: 1px solid var(--glass-stroke); padding: 8px 12px; border-radius: var(--radius-md); color: var(--text-primary); outline: none; font-size: 0.85rem;" placeholder="Type tag and press Enter..." onkeydown="handleTagInputKeydown(event)" />
+            <button type="button" class="btn-table-action primary" onclick="addTagFromInput()" style="padding: 6px 14px;">+ Add Tag</button>
+          </div>
+
+          <!-- Existing Available Tags Picker -->
+          <div style="margin-top: 8px;">
+            <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">Existing Available Tags (click to toggle):</span>
+            <div id="availableTagsPicker" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 80px; overflow-y: auto; padding: 2px;">
+              <!-- All tags across files rendered here as suggestion pills -->
+            </div>
+          </div>
+        </div>
+
+        <!-- BOTTOM SECTION: FRAME SCREENSHOT GALLERY SELECTOR -->
+        <div style="margin-top: 10px; border-top: 1px solid var(--glass-stroke); padding-top: 14px;">
+          <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; display: block;">
+            🖼️ Select Primary Cover Thumbnail Frame
+          </label>
+          <div id="editGalleryPicker" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; max-height: 200px; overflow-y: auto; padding: 4px; background: rgba(0, 0, 0, 0.2); border-radius: var(--radius-md); border: 1px solid var(--glass-stroke);">
+            <!-- Thumbnails rendered dynamically -->
+          </div>
+        </div>
+
+        <div class="flex-between" style="margin-top: 14px; border-top: 1px solid var(--glass-stroke); padding-top: 14px;">
+          <button type="button" class="btn-table-action" onclick="closeEditModal()">Cancel</button>
+          <button type="submit" class="btn-table-action primary" style="padding: 8px 20px; font-weight: 700; background: var(--color-electric-blue); color: white;">💾 Save Changes</button>
+        </div>
+      </form>
     </div>
   </div>
 

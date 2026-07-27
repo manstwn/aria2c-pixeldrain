@@ -1485,9 +1485,9 @@ input:focus {
    ========================================================================== */
 
 .table-thumb-box {
-  width: 135px;
-  height: 76px;
-  border-radius: var(--radius-md);
+  width: 240px;
+  height: 135px;
+  border-radius: 4px;
   overflow: hidden;
   border: 1px solid var(--glass-stroke);
   position: relative;
@@ -1500,7 +1500,7 @@ input:focus {
 }
 
 .table-thumb-box:hover {
-  transform: scale(1.05);
+  transform: scale(1.03);
   border-color: var(--color-electric-blue);
   box-shadow: 0 0 16px rgba(0, 122, 255, 0.45);
 }
@@ -1525,23 +1525,23 @@ input:focus {
 }
 
 .table-thumb-box.fallback {
-  font-size: 1.6rem;
+  font-size: 2rem;
   cursor: default;
   background: rgba(255, 255, 255, 0.04);
 }
 
-/* 3-Row Compact Vertical Actions Stack */
+/* 3-Button Horizontal Action Stack */
 .action-buttons-stack {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  width: 140px;
+  gap: 6px;
+  width: 270px;
   margin-left: auto;
 }
 
 .action-buttons-stack .action-row {
   display: flex;
-  gap: 4px;
+  gap: 5px;
   width: 100%;
 }
 
@@ -1549,8 +1549,9 @@ input:focus {
   flex: 1;
   text-align: center;
   justify-content: center;
-  padding: 4px 6px;
-  font-size: 0.725rem;
+  padding: 6px 8px;
+  font-size: 0.775rem;
+  font-weight: 600;
   box-sizing: border-box;
   white-space: nowrap;
 }
@@ -1569,7 +1570,7 @@ input:focus {
 .gallery-item-card {
   background: rgba(19, 27, 46, 0.75);
   border: 1px solid var(--glass-stroke);
-  border-radius: var(--radius-lg);
+  border-radius: 4px; /* Sharper crisp borders */
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1587,6 +1588,7 @@ input:focus {
   width: 100%;
   aspect-ratio: 16/9;
   background-color: rgba(30, 41, 59, 0.8);
+  border-radius: 4px 4px 0 0;
   overflow: hidden;
   cursor: pointer;
   display: flex;
@@ -1594,6 +1596,17 @@ input:focus {
   justify-content: center;
   contain: layout paint;
   transition: border-color 0.2s ease;
+}
+
+/* 4+ Grid View Compact Mode: Show only Image, Name, and Play Button */
+.gallery-grid.compact-mode .gallery-specs-line,
+.gallery-grid.compact-mode .gofile-link-badge {
+  display: none !important;
+}
+
+.gallery-grid.compact-mode .gallery-card-body {
+  padding: 8px 10px;
+  gap: 6px;
 }
 
 .cover-layer {
@@ -1663,7 +1676,7 @@ input:focus {
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.gallery-card-cover:hover .cover-frame-dots {
+.gallery-item-card:hover .cover-frame-dots {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
