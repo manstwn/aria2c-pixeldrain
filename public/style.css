@@ -1919,3 +1919,40 @@ input:focus {
     grid-column: span 1;
   }
 }
+
+/* Quick Tag Floating Dropdown Menu */
+.quick-tag-dropdown {
+  position: absolute;
+  z-index: 9999;
+  width: 190px;
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+  font-family: var(--font-sans);
+}
+
+.quick-tag-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.15s ease;
+}
+
+.quick-tag-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.quick-tag-item.active {
+  background: rgba(16, 185, 129, 0.18);
+  color: var(--color-emerald-live);
+}

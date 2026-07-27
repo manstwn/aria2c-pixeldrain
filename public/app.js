@@ -719,6 +719,24 @@ function renderLedger() {
       const methodStr = file.engine || file.method || (file.metadata && file.metadata.engine) || 'aria2c';
       const methodRow = `<div class="method-name-row" style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px;" title="Download Method">⚡ Method: ${escapeHtml(methodStr)}</div>`;
 
+      let sizeStr = '';
+      if (meta.size_formatted && meta.size_formatted !== 'N/A') {
+        sizeStr = meta.size_formatted;
+      } else if (meta.size_bytes > 0) {
+        sizeStr = formatBytes(meta.size_bytes);
+      }
+
+      const durationText = meta.duration_formatted || (meta.duration_seconds ? `${meta.duration_seconds}s` : '');
+
+      const specParts = [];
+      if (sizeStr) specParts.push(sizeStr);
+      if (durationText) specParts.push(durationText);
+      if (meta.resolution) specParts.push(meta.resolution);
+
+      const specsRow = specParts.length > 0
+        ? `<div class="file-specs-row" style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px;" title="File Specs (Size - Duration - Resolution)">📊 ${escapeHtml(specParts.join(' - '))}</div>`
+        : '';
+
       const thumbUrl = file.selected_thumbnail || ((file.thumbnails && file.thumbnails.length > 0) ? file.thumbnails[0] : null);
       const previewCellHTML = thumbUrl
         ? `<div class="table-thumb-box" id="tableCover_${file.id}" onclick="openGalleryModal('${file.id}')" title="Click to view screenshot gallery">
@@ -745,11 +763,14 @@ function renderLedger() {
               <span class="file-name-text" style="font-weight: 700; color: var(--text-primary);" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span>
             </div>
             ${methodRow}
-            ${(file.tags && file.tags.length > 0) ? `
-              <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">
-                ${file.tags.map(t => `<span style="background: rgba(0, 122, 255, 0.12); border: 1px solid rgba(0, 122, 255, 0.25); color: #60a5fa; font-size: 0.675rem; padding: 1px 6px; border-radius: 4px; font-family: var(--font-mono);">🏷️ ${escapeHtml(t)}</span>`).join('')}
-              </div>
-            ` : ''}
+            ${specsRow}
+            <div style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px;">
+              ${(file.tags && file.tags.length > 0)
+                ? file.tags.map(t => `<span style="background: rgba(0, 122, 255, 0.15); border: 1px solid rgba(0, 122, 255, 0.3); color: #60a5fa; font-size: 0.675rem; padding: 1px 6px; border-radius: 4px; font-family: var(--font-mono); font-weight: 600;">🏷️ ${escapeHtml(t)}</span>`).join('')
+                : `<span style="font-size: 0.7rem; color: var(--text-muted); font-style: italic;">No tags</span>`
+              }
+              <button type="button" onclick="toggleQuickTagDropdown(event, '${file.id}')" style="background: rgba(0, 122, 255, 0.12); border: 1px solid rgba(0, 122, 255, 0.3); color: #60a5fa; font-size: 0.675rem; padding: 1px 6px; border-radius: 4px; cursor: pointer; transition: all 0.2s;" title="Quick Tag Menu">🏷️ +</button>
+            </div>
             ${file.download_url ? `
               <div class="gofile-link-badge" style="margin-top: 6px; max-width: 100%;">
                 <a href="${escapeHtml(file.download_url)}" target="_blank" rel="noopener">${escapeHtml(file.download_url)}</a>
@@ -1643,5 +1664,121 @@ function stopTableHoverSlideshow(evt, fileId) {
   if (layerBg && layerFg && defaultThumb) {
     layerBg.style.backgroundImage = `url("${defaultThumb}")`;
     layerFg.style.opacity = '0';
+  }
+}
+
+/* ==========================================================================
+   INLINE FAST QUICK-TAG DROPDOWN MENU
+   ========================================================================== */
+
+let activeQuickTagFileId = null;
+
+function toggleQuickTagDropdown(e, fileId) {
+  e.stopPropagation();
+  const dropdown = document.getElementById('quickTagDropdown');
+  if (!dropdown) return;
+
+  if (activeQuickTagFileId === fileId && !dropdown.classList.contains('hidden')) {
+    closeQuickTagDropdown();
+    return;
+  }
+
+  activeQuickTagFileId = fileId;
+  renderQuickTagList();
+
+  const rect = e.currentTarget.getBoundingClientRect();
+  dropdown.style.top = `${window.scrollY + rect.bottom + 4}px`;
+  dropdown.style.left = `${window.scrollX + rect.left}px`;
+  dropdown.classList.remove('hidden');
+
+  const input = document.getElementById('quickTagInput');
+  if (input) {
+    input.value = '';
+    setTimeout(() => input.focus(), 50);
+  }
+}
+
+function closeQuickTagDropdown() {
+  const dropdown = document.getElementById('quickTagDropdown');
+  if (dropdown) dropdown.classList.add('hidden');
+  activeQuickTagFileId = null;
+}
+
+document.addEventListener('click', (e) => {
+  const dropdown = document.getElementById('quickTagDropdown');
+  if (dropdown && !dropdown.classList.contains('hidden') && !dropdown.contains(e.target)) {
+    closeQuickTagDropdown();
+  }
+});
+
+function renderQuickTagList() {
+  const container = document.getElementById('quickTagList');
+  if (!container || !activeQuickTagFileId) return;
+
+  const file = ledgerFiles.find(f => f.id === activeQuickTagFileId);
+  if (!file) return;
+
+  const fileTags = Array.isArray(file.tags) ? file.tags : [];
+  const allUniqueTags = Array.from(new Set(ledgerFiles.flatMap(f => f.tags || []).filter(Boolean)));
+
+  if (allUniqueTags.length === 0) {
+    container.innerHTML = `<div style="padding: 8px; text-align: center; color: var(--text-muted); font-size: 0.75rem; font-style: italic;">No existing tags. Type above to add one.</div>`;
+    return;
+  }
+
+  container.innerHTML = allUniqueTags.map(tag => {
+    const isAdded = fileTags.includes(tag);
+    return `
+      <div class="quick-tag-item ${isAdded ? 'active' : ''}" onclick="quickToggleFileTag('${escapeHtml(tag)}')">
+        <span>🏷️ ${escapeHtml(tag)}</span>
+        <span>${isAdded ? '✓' : '+'}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+async function quickToggleFileTag(tag) {
+  if (!activeQuickTagFileId) return;
+  const file = ledgerFiles.find(f => f.id === activeQuickTagFileId);
+  if (!file) return;
+
+  let currentTags = Array.isArray(file.tags) ? [...file.tags] : [];
+  if (currentTags.includes(tag)) {
+    currentTags = currentTags.filter(t => t !== tag);
+  } else {
+    currentTags.push(tag);
+  }
+
+  file.tags = currentTags; // Optimistic update
+  renderQuickTagList();
+  renderLedger();
+
+  try {
+    const res = await fetch(`/api/files/${activeQuickTagFileId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: currentTags })
+    });
+    if (!res.ok) fetchFiles();
+  } catch (err) {
+    fetchFiles();
+  }
+}
+
+async function addQuickTagFromInput() {
+  const input = document.getElementById('quickTagInput');
+  if (!input || !activeQuickTagFileId) return;
+
+  const tagVal = input.value.trim().toLowerCase();
+  if (tagVal) {
+    await quickToggleFileTag(tagVal);
+    input.value = '';
+  }
+}
+
+function handleQuickTagInputKeydown(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    addQuickTagFromInput();
   }
 }

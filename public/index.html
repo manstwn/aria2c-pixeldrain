@@ -463,6 +463,17 @@
     </div>
   </div>
 
+  <!-- QUICK TAG FLOATING DROPDOWN MENU -->
+  <div id="quickTagDropdown" class="quick-tag-dropdown hidden" onclick="event.stopPropagation()">
+    <div style="padding: 6px 8px; border-bottom: 1px solid var(--glass-stroke); display: flex; gap: 4px;">
+      <input type="text" id="quickTagInput" placeholder="New tag..." style="flex: 1; background: var(--bg-surface-container-highest); border: 1px solid var(--glass-stroke); border-radius: 4px; padding: 3px 6px; color: var(--text-primary); font-size: 0.75rem; outline: none;" onkeydown="handleQuickTagInputKeydown(event)" />
+      <button type="button" class="btn-table-action primary" onclick="addQuickTagFromInput()" style="padding: 2px 6px; font-size: 0.7rem;">Add</button>
+    </div>
+    <div id="quickTagList" style="display: flex; flex-direction: column; gap: 2px; padding: 6px; max-height: 180px; overflow-y: auto;">
+      <!-- Available tags listed here -->
+    </div>
+  </div>
+
   <!-- TOAST NOTIFICATION SYSTEM -->
   <div id="toastContainer" class="toast-container"></div>
 
