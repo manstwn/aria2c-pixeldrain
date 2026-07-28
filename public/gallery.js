@@ -215,9 +215,25 @@ function updateGalleryTagFilterSelect() {
   }
 }
 
-/* ==========================================================================
-   GALLERY PAGE RENDERING & INTERACTIVE SCRUBBING
-   ========================================================================== */
+function formatResolutionTag(meta) {
+  if (!meta) return '';
+  let h = meta.height;
+  if (!h && meta.resolution && meta.resolution.includes('x')) {
+    const parts = meta.resolution.split('x');
+    h = parseInt(parts[1], 10) || parseInt(parts[0], 10);
+  }
+  if (h) {
+    if (h >= 2160) return '4K';
+    if (h >= 1440) return '1440p';
+    if (h >= 1080) return '1080p';
+    if (h >= 720) return '720p';
+    if (h >= 480) return '480p';
+    if (h >= 360) return '360p';
+    return `${h}p`;
+  }
+  if (meta.resolution) return meta.resolution;
+  return '';
+}
 
 function changeGridColumns(cols) {
   const container = document.getElementById('galleryGridContainer');
@@ -333,11 +349,24 @@ function renderGalleryPage() {
     const thumbs = file.thumbnails || [];
     const thumbUrl = file.selected_thumbnail || (thumbs.length > 0 ? thumbs[0] : null);
 
-    // Top-Right Badge: Show Video Duration (not frame count)
+    // Top-Right Badge: Show Resolution + Duration (e.g. "720p 05:32")
+    const resTag = formatResolutionTag(meta);
     const durationText = meta.duration_formatted || (meta.duration_seconds ? `${meta.duration_seconds}s` : '');
-    const topBadgeHTML = durationText
-      ? `<span class="gallery-cover-badge">⏱️ ${escapeHtml(durationText)}</span>`
-      : (cat === 'video' ? `<span class="gallery-cover-badge">🎬 Video</span>` : '');
+
+    let badgeText = '';
+    if (resTag && durationText) {
+      badgeText = `${resTag} ${durationText}`;
+    } else if (resTag) {
+      badgeText = resTag;
+    } else if (durationText) {
+      badgeText = durationText;
+    } else if (cat === 'video') {
+      badgeText = 'Video';
+    }
+
+    const topBadgeHTML = badgeText
+      ? `<span class="gallery-cover-badge">${escapeHtml(badgeText)}</span>`
+      : '';
 
     // Bottom Frame Lighting Dots
     const frameDotsHTML = (thumbs.length > 1)

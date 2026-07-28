@@ -443,6 +443,8 @@ function streamVideoFromPixeldrain(targetUrl, headers, req, res, depth = 0) {
   proxyReq.end();
 }
 
+const INITIAL_CHUNK_SIZE = 3 * 1024 * 1024; // 3 MB initial chunk cap for fast video startup (<1-2s)
+
 app.get('/api/video/:id', (req, res) => {
   const { id } = req.params;
 
@@ -464,8 +466,24 @@ app.get('/api/video/:id', (req, res) => {
     'Accept': '*/*'
   };
 
-  if (req.headers.range) {
-    reqHeaders['Range'] = req.headers.range;
+  // Smart Range Capping: Cap open-ended range requests (e.g. bytes=0-) to 3 MB chunks
+  // to bypass Pixeldrain long-connection throttling and start video playback in < 1-2 seconds
+  const incomingRange = req.headers.range;
+  if (!incomingRange) {
+    reqHeaders['Range'] = `bytes=0-${INITIAL_CHUNK_SIZE - 1}`;
+  } else {
+    const match = incomingRange.match(/bytes=(\d+)-(\d+)?/);
+    if (match) {
+      const start = parseInt(match[1], 10);
+      const end = match[2] ? parseInt(match[2], 10) : null;
+      if (end === null || isNaN(end)) {
+        reqHeaders['Range'] = `bytes=${start}-${start + INITIAL_CHUNK_SIZE - 1}`;
+      } else {
+        reqHeaders['Range'] = incomingRange;
+      }
+    } else {
+      reqHeaders['Range'] = incomingRange;
+    }
   }
 
   const pixeldrainToken = (process.env.PIXELDRAIN_API_TOKEN || '').trim();
