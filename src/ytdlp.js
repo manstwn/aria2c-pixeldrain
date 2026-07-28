@@ -287,18 +287,48 @@ function startDownload(qItem, onComplete, onError) {
 }
 
 /**
- * Remove/cancel active yt-dlp task
+ * Remove/cancel active yt-dlp task and 100% wipe temporary files from disk
  */
 function removeDownload(gid) {
   const task = activeTasks.get(gid);
   if (task) {
     if (task.process) {
-      try { task.process.kill(); } catch (e) {}
+      try { task.process.kill('SIGKILL'); } catch (e) {}
     }
-    if (task.filePath && fs.existsSync(task.filePath)) {
-      try { fs.rmSync(task.filePath, { force: true }); } catch (e) {}
+    if (task.uploadTaskPromise && task.uploadTaskPromise.abort) {
+      try { task.uploadTaskPromise.abort(); } catch (e) {}
     }
+
+    const targetKeywords = [gid];
+    if (task.filePath) {
+      const fn = path.basename(task.filePath);
+      targetKeywords.push(fn);
+      targetKeywords.push(fn.split('.')[0]);
+      if (fs.existsSync(task.filePath)) {
+        try { fs.rmSync(task.filePath, { recursive: true, force: true }); } catch (e) {}
+      }
+    }
+
+    const downloadsDir = path.resolve(DOWNLOADS_DIR);
+    if (fs.existsSync(downloadsDir)) {
+      try {
+        const filesInDir = fs.readdirSync(downloadsDir);
+        for (const f of filesInDir) {
+          const fullP = path.join(downloadsDir, f);
+          const isMatch = targetKeywords.some(kw => kw && kw.length > 2 && f.includes(kw));
+
+          if (isMatch) {
+            try {
+              fs.rmSync(fullP, { recursive: true, force: true });
+              console.log(`[yt-dlp Cleanup] Wiped temp download file: ${fullP}`);
+            } catch (e) {}
+          }
+        }
+      } catch (e) {}
+    }
+
     activeTasks.delete(gid);
+    console.log(`[yt-dlp Cleanup] Task ${gid} cancelled & disk files wiped.`);
   }
 }
 

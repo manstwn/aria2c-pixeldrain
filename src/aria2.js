@@ -498,6 +498,46 @@ async function processNextQueueItem() {
   }
 }
 
+/**
+ * Helper to delete all local download files, partial files (.part, .ytdl), and .aria2 control files associated with a task
+ */
+async function cleanUpTaskFiles(gid, taskDetails = null) {
+  try {
+    const downloadsDir = path.resolve(db.DOWNLOADS_DIR);
+    if (!fs.existsSync(downloadsDir)) return;
+
+    const targetKeywords = [gid];
+
+    if (taskDetails && taskDetails.files) {
+      for (const file of taskDetails.files) {
+        if (file.path) {
+          const fn = path.basename(file.path);
+          targetKeywords.push(fn);
+          targetKeywords.push(fn.split('.')[0]);
+          if (fs.existsSync(file.path)) {
+            try { fs.rmSync(file.path, { recursive: true, force: true }); } catch (e) {}
+          }
+        }
+      }
+    }
+
+    const filesInDir = fs.readdirSync(downloadsDir);
+    for (const f of filesInDir) {
+      const fullP = path.join(downloadsDir, f);
+      const isMatch = targetKeywords.some(kw => kw && kw.length > 2 && f.includes(kw));
+
+      if (isMatch) {
+        try {
+          fs.rmSync(fullP, { recursive: true, force: true });
+          console.log(`[Disk Cleanup] Wiped temp download file: ${fullP}`);
+        } catch (e) {}
+      }
+    }
+  } catch (err) {
+    console.warn(`[Disk Cleanup Warning] Error cleaning up download files for GID ${gid}:`, err.message);
+  }
+}
+
 // Start continuous background status monitoring every 3 seconds
 let monitorInterval = null;
 function startMonitor() {
@@ -507,30 +547,44 @@ function startMonitor() {
 }
 
 /**
- * Cancel/remove a download task by GID and clean up disk files
+ * Cancel/remove a download task by GID and clean up disk files immediately at ANY stage
  */
 async function removeDownload(gid) {
   if (!gid) throw new Error('Valid GID is required.');
 
-  // If this is an active yt-dlp task
+  // 1. Check if an active upload stream exists in activeUploads map and abort it
+  const activeUpload = activeUploads.get(gid);
+  if (activeUpload) {
+    if (activeUpload.uploadTaskPromise && activeUpload.uploadTaskPromise.abort) {
+      try { activeUpload.uploadTaskPromise.abort(); } catch (e) {}
+    }
+    cleanUpTaskFiles(gid, null);
+    activeUploads.delete(gid);
+  }
+
+  // 2. If this is an active yt-dlp task
   if (ytdlp.activeTasks.has(gid)) {
     ytdlp.removeDownload(gid);
     db.removeFromQueue(gid);
-    console.log(`[yt-dlp] Download task ${gid} cancelled.`);
-    setTimeout(() => processNextQueueItem(), 500);
+    console.log(`[yt-dlp] Download task ${gid} cancelled & disk files wiped.`);
+    setTimeout(() => processNextQueueItem(), 300);
     return true;
   }
 
-  // If this is a persistent queue-only ID (not yet submitted to Aria2 RPC),
-  // just delete it from queue.json directly without touching Aria2 at all.
+  // 3. If this is a persistent queue-only ID
   if (typeof gid === 'string' && gid.startsWith('q_')) {
-    const removed = db.removeFromQueue(gid);
-    if (removed) {
-      console.log(`[Queue Engine] Queued item ${gid} removed from queue before starting.`);
+    const queue = db.getAllQueue();
+    const qItem = queue.find(q => q.id === gid);
+    if (qItem && qItem.filename) {
+      cleanUpTaskFiles(gid, { files: [{ path: path.join(db.DOWNLOADS_DIR, qItem.filename) }] });
     }
+    db.removeFromQueue(gid);
+    console.log(`[Queue Engine] Queued item ${gid} removed from queue & disk wiped.`);
+    setTimeout(() => processNextQueueItem(), 300);
     return true;
   }
 
+  // 4. Active Aria2 RPC task
   try {
     let task = null;
     try {
@@ -547,18 +601,21 @@ async function removeDownload(gid) {
       }
     }
 
-    // Clean up local download file and .aria2 control file
+    // Clean up local download files, partial files (.part, .ytdl), and .aria2 control files
     await cleanUpTaskFiles(gid, task);
 
     db.removeFromQueue(gid);
     activeUploads.delete(gid);
     processedGids.add(gid);
     console.log(`[Aria2] Download task GID ${gid} cancelled and local files deleted.`);
+    setTimeout(() => processNextQueueItem(), 300);
     return true;
   } catch (err) {
     db.removeFromQueue(gid);
+    cleanUpTaskFiles(gid, null);
     console.error(`[Aria2] Failed to remove download task GID ${gid}:`, err.message);
-    throw err;
+    setTimeout(() => processNextQueueItem(), 300);
+    return true;
   }
 }
 
