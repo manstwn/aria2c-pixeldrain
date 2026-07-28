@@ -396,24 +396,21 @@ function renderGalleryPage() {
     const thumbs = file.thumbnails || [];
     const thumbUrl = file.selected_thumbnail || (thumbs.length > 0 ? thumbs[0] : null);
 
-    // Top-Right Badge: Show Resolution + Duration (e.g. "720p 05:32")
+    // Top-Right Badges: Show Resolution and Duration as separate distinct pills
     const resTag = formatResolutionTag(meta);
     const durationText = meta.duration_formatted || (meta.duration_seconds ? `${meta.duration_seconds}s` : '');
 
-    let badgeText = '';
-    if (resTag && durationText) {
-      badgeText = `${resTag} ${durationText}`;
-    } else if (resTag) {
-      badgeText = resTag;
-    } else if (durationText) {
-      badgeText = durationText;
-    } else if (cat === 'video') {
-      badgeText = 'Video';
+    let topBadgeHTML = '<div style="position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 5;">';
+    if (resTag) {
+      topBadgeHTML += `<span class="gallery-cover-badge">${escapeHtml(resTag)}</span>`;
     }
-
-    const topBadgeHTML = badgeText
-      ? `<span class="gallery-cover-badge">${escapeHtml(badgeText)}</span>`
-      : '';
+    if (durationText) {
+      topBadgeHTML += `<span class="gallery-cover-badge">${escapeHtml(durationText)}</span>`;
+    }
+    if (!resTag && !durationText && cat === 'video') {
+      topBadgeHTML += `<span class="gallery-cover-badge">Video</span>`;
+    }
+    topBadgeHTML += '</div>';
 
     // Bottom Frame Lighting Dots
     const frameDotsHTML = (thumbs.length > 1)

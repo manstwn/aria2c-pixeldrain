@@ -185,8 +185,22 @@ async function loadVideoDetails() {
       if (sub) sub.textContent = '⚠️ Player Error: ' + errMsg;
     };
 
+    // Populate Under-Title Meta Sub: duration - resolution - size
+    const metaParts = [];
+    const durStr = meta.duration_formatted || (meta.duration_seconds ? `${meta.duration_seconds}s` : '');
+    const resStr = meta.resolution || (meta.width && meta.height ? `${meta.width}x${meta.height}` : '');
+    const sizeStr = meta.size_formatted || (meta.size_bytes ? formatBytes(meta.size_bytes) : '');
+
+    if (durStr) metaParts.push(durStr);
+    if (resStr) metaParts.push(resStr);
+    if (sizeStr) metaParts.push(sizeStr);
+
+    const subEl = document.getElementById('videoMetaSub');
+    if (subEl) {
+      subEl.textContent = metaParts.join(' - ');
+    }
+
     // Populate Sidebar Details
-    const meta = currentFile.metadata || {};
     document.getElementById('specCat').textContent = meta.category || 'Video';
     document.getElementById('specSize').textContent = meta.size_formatted || (meta.size_bytes ? formatBytes(meta.size_bytes) : 'N/A');
     document.getElementById('specDuration').textContent = meta.duration_formatted || (meta.duration_seconds ? `${meta.duration_seconds}s` : 'N/A');
@@ -251,6 +265,20 @@ function changeWatchGridColumns(cols) {
     grid.style.setProperty('--watch-thumb-cols', numCols);
   }
   localStorage.setItem('watch_grid_cols', numCols);
+}
+
+function toggleWatchPreviewSection() {
+  const grid = document.getElementById('watchThumbnailsGrid');
+  const txt = document.getElementById('txtTogglePreview');
+  const btn = document.getElementById('btnToggleWatchPreview');
+  if (!grid) return;
+
+  const isHidden = grid.classList.toggle('hidden');
+  if (txt) txt.textContent = isHidden ? 'Show' : 'Hide';
+  if (btn) {
+    const icon = btn.querySelector('.material-symbols-outlined');
+    if (icon) icon.textContent = isHidden ? 'visibility' : 'visibility_off';
+  }
 }
 
 /* ==========================================================================

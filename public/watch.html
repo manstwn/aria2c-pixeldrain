@@ -294,6 +294,7 @@
           <div class="watch-title-bar">
             <div>
               <h2 id="videoTitle" class="watch-video-title">Loading video title...</h2>
+              <p id="videoMetaSub" style="margin-top: 6px; font-size: 0.85rem; color: var(--text-muted); font-weight: 500;"></p>
             </div>
           </div>
 
@@ -305,14 +306,21 @@
                 Preview (<span id="watchThumbCount">0</span>)
               </h3>
 
-              <div class="page-size-selector grid-selector-mobile-hide" style="display: flex; align-items: center; gap: 6px;">
-                <label for="watchGridColsSelect" style="font-size: 0.8rem;">Grid:</label>
-                <select id="watchGridColsSelect" onchange="changeWatchGridColumns(this.value)" class="glow-input" style="padding: 3px 8px; font-size: 0.8rem;">
-                  <option value="3">3 Grid</option>
-                  <option value="4">4 Grid</option>
-                  <option value="5" selected>5 Grid</option>
-                  <option value="6">6 Grid</option>
-                </select>
+              <div style="display: flex; align-items: center; gap: 10px; margin-left: auto;">
+                <div class="page-size-selector grid-selector-mobile-hide" style="display: flex; align-items: center; gap: 6px;">
+                  <label for="watchGridColsSelect" style="font-size: 0.8rem;">Grid:</label>
+                  <select id="watchGridColsSelect" onchange="changeWatchGridColumns(this.value)" class="glow-input" style="padding: 3px 8px; font-size: 0.8rem;">
+                    <option value="3">3 Grid</option>
+                    <option value="4">4 Grid</option>
+                    <option value="5" selected>5 Grid</option>
+                    <option value="6">6 Grid</option>
+                  </select>
+                </div>
+
+                <button type="button" id="btnToggleWatchPreview" onclick="toggleWatchPreviewSection()" class="btn-table-action" style="padding: 4px 10px; font-size: 0.8rem; display: flex; align-items: center; gap: 4px;" title="Hide/Show Preview Grid">
+                  <span class="material-symbols-outlined" style="font-size: 16px;">visibility_off</span>
+                  <span id="txtTogglePreview">Hide</span>
+                </button>
               </div>
             </div>
 
