@@ -526,9 +526,8 @@ app.get('/api/video/:id', (req, res) => {
     logger.debug('[Video Proxy Auth] Attached Pixeldrain API basic authorization header');
   }
 
-  if (req.headers.range) {
-    reqHeaders['Range'] = req.headers.range;
-  }
+  // Force Range header to guarantee HTTP 206 Partial Content chunked response from Pixeldrain
+  reqHeaders['Range'] = req.headers.range || 'bytes=0-';
 
   streamVideoFromPixeldrain(targetUrl, reqHeaders, req, res);
 });
