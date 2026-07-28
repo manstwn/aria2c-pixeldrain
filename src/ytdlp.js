@@ -109,6 +109,7 @@ function startDownload(qItem, onComplete, onError) {
     '--no-mtime',
     '--newline',
     '--concurrent-fragments', '16',
+    '--remux-video', 'mp4',
     '--merge-output-format', 'mp4',
     '-o', outPattern,
     qItem.url
