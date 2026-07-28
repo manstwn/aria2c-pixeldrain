@@ -103,17 +103,23 @@ function startDownload(qItem, onComplete, onError) {
 
   const outPattern = outFilename ? path.join(downloadsDir, outFilename) : path.join(downloadsDir, '%(title)s [%(id)s].%(ext)s');
 
+  const isM3u8Url = (qItem.url || '').toLowerCase().includes('.m3u8');
+
   const args = [
-    '-N', '16',
+    '-N', '8',
     '--no-playlist',
     '--no-mtime',
     '--newline',
-    '--concurrent-fragments', '16',
-    '--remux-video', 'mp4',
+    '--concurrent-fragments', '8',
     '--merge-output-format', 'mp4',
-    '-o', outPattern,
-    qItem.url
+    '--remux-video', 'mp4'
   ];
+
+  if (isM3u8Url) {
+    args.push('--downloader', 'ffmpeg');
+  }
+
+  args.push('-o', outPattern, qItem.url);
 
   console.log(`[yt-dlp] Starting execution: ${executable} ${args.join(' ')}`);
 
