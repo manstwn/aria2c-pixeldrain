@@ -310,6 +310,9 @@ async function cleanUpTaskFiles(gid, taskDetails = null) {
 /**
  * Poll aria2c stopped downloads to trigger Pixeldrain upload for completed tasks or clean up failed tasks
  */
+/**
+ * Poll aria2c stopped downloads to trigger Pixeldrain upload for completed tasks or clean up failed tasks
+ */
 async function pollCompletedDownloads() {
   try {
     const stopped = await rpcCall('aria2.tellStopped', [0, 50]) || [];
@@ -320,13 +323,14 @@ async function pollCompletedDownloads() {
         const filePath = task.files && task.files[0] && task.files[0].path;
         if (!filePath || !fs.existsSync(filePath)) {
           console.warn(`[Aria2] Download completed for GID ${task.gid} but file not found on disk.`);
+          db.removeFromQueue(task.gid);
           continue;
         }
 
         const filename = path.basename(filePath);
         const sourceData = taskSourceUrls.get(task.gid);
         const sourceUrlStr = typeof sourceData === 'string' ? sourceData : (sourceData && sourceData.url ? sourceData.url : '');
-        console.log(`[Aria2] Task ${task.gid} completed downloading (${filename}). Triggering Pixeldrain upload...`);
+        console.log(`[Aria2] Task ${task.gid} completed downloading (${filename}). Starting serial pipeline (Upload -> Thumbnails -> Cleanup)...`);
 
         activeUploads.set(task.gid, {
           filename,
@@ -338,27 +342,40 @@ async function pollCompletedDownloads() {
           uploadSpeed: 0
         });
 
-        // Trigger asynchronous Pixeldrain upload pipeline
+        const queuedItems = db.getAllQueue();
+        const qItem = queuedItems.find(q => q.gid === task.gid);
+        if (qItem) {
+          db.updateQueueItem(qItem.id, { status: 'UPLOADING' });
+        }
+
+        // Trigger Pixeldrain upload -> thumbnail generation -> metadata -> local file cleanup
         pixeldrain.uploadToPixeldrain(filePath, filename, (progressData) => {
           const current = activeUploads.get(task.gid) || {};
+          const newStatus = progressData.status || current.status || 'UPLOADING';
           activeUploads.set(task.gid, {
             ...current,
             ...progressData,
-            status: 'UPLOADING'
+            status: newStatus
           });
+          if (qItem && progressData.status) {
+            db.updateQueueItem(qItem.id, { status: progressData.status });
+          }
         }, sourceUrlStr)
           .then(record => {
+            console.log(`[Aria2 Pipeline] ✅ Task ${task.gid} 100% finished (Download -> Upload -> Thumbnails -> Cleanup).`);
             activeUploads.set(task.gid, { filename, status: 'UPLOADED', record, uploadProgress: 100 });
             db.removeFromQueue(task.gid);
-            setTimeout(() => {
-              activeUploads.delete(task.gid);
-              try { rpcCall('aria2.removeDownloadResult', [task.gid]); } catch (e) {}
-              processNextQueueItem();
-            }, 2000);
+            activeUploads.delete(task.gid);
+            try { rpcCall('aria2.removeDownloadResult', [task.gid]); } catch (e) {}
+            // ONLY NOW launch the next queue item after disk cleanup!
+            processNextQueueItem();
           })
           .catch(err => {
-            console.error(`[Aria2] Pixeldrain upload failed for task ${task.gid}:`, err.message);
+            console.error(`[Aria2 Pipeline] ❌ Upload/Processing failed for task ${task.gid}:`, err.message);
             activeUploads.set(task.gid, { filename, status: 'UPLOAD_FAILED', error: err.message });
+            db.removeFromQueue(task.gid);
+            activeUploads.delete(task.gid);
+            try { rpcCall('aria2.removeDownloadResult', [task.gid]); } catch (e) {}
             processNextQueueItem();
           });
       } else if (task.status === 'error' && !processedGids.has(task.gid)) {
@@ -366,25 +383,27 @@ async function pollCompletedDownloads() {
         console.warn(`[Aria2] Task ${task.gid} failed with error (${task.errorMessage || 'Invalid URL or download error'}). Cleaning up temporary files...`);
         await cleanUpTaskFiles(task.gid, task);
         
-        // Find corresponding queue record and set to PAUSED with error message
         const queuedItems = db.getAllQueue();
         const qItem = queuedItems.find(q => q.gid === task.gid);
         if (qItem) {
           db.updateQueueItem(qItem.id, {
             status: 'PAUSED',
             gid: '',
-            error: task.errorMessage || 'Download failed (e.g. invalid URL or network error). Requires manual retry.'
+            error: task.errorMessage || 'Download failed (e.g. invalid URL or network error).'
           });
         }
         
         try {
           await rpcCall('aria2.removeDownloadResult', [task.gid]);
         } catch (e) {}
+
+        processNextQueueItem();
       }
     }
 
-    // Process next queued task if pipeline is free
-    processNextQueueItem();
+    if (!isPipelineBusy()) {
+      processNextQueueItem();
+    }
   } catch (err) {
     ensureAria2Daemon();
   }
@@ -392,9 +411,37 @@ async function pollCompletedDownloads() {
 
 let isProcessingQueue = false;
 
+function isPipelineBusy() {
+  // 1. Check activeUploads map for any task currently downloading, uploading, or processing
+  for (const [gid, upload] of activeUploads.entries()) {
+    if (upload && (
+      upload.status === 'DOWNLOADING' ||
+      upload.status === 'UPLOADING' ||
+      upload.status === 'PROCESSING' ||
+      upload.status === 'CLEANING'
+    )) {
+      return true;
+    }
+  }
+
+  // 2. Check yt-dlp active tasks
+  const ytdlpTasks = ytdlp.getDownloadsStatus() || [];
+  if (ytdlpTasks.some(t => t.status === 'DOWNLOADING' || t.status === 'UPLOADING' || t.status === 'PROCESSING')) {
+    return true;
+  }
+
+  // 3. Check data/queue.json for any items currently downloading, uploading, or processing
+  const queue = db.getAllQueue();
+  if (queue.some(q => q.status === 'DOWNLOADING' || q.status === 'UPLOADING' || q.status === 'PROCESSING')) {
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * Strict Serial Queue Processor:
- * Ensures only 1 task downloads AND uploads completely before starting the next task!
+ * Ensures only 1 task downloads, uploads, extracts metadata, generates thumbnails, and cleans up before starting the next task!
  */
 async function processNextQueueItem() {
   if (isProcessingQueue) return;
@@ -404,26 +451,18 @@ async function processNextQueueItem() {
   try {
     isProcessingQueue = true;
 
-    // 1. Check active downloads in Aria2 RPC & active yt-dlp tasks
+    // 1. Check if pipeline is busy anywhere (Download, Upload, Thumbnails, Cleanup)
+    if (isPipelineBusy()) {
+      return;
+    }
+
+    // 2. Double-check Aria2 RPC active downloads
     let activeTasks = [];
     try {
       activeTasks = await rpcCall('aria2.tellActive') || [];
     } catch (e) {}
 
-    const ytdlpActive = ytdlp.getDownloadsStatus().some(t => t.status === 'DOWNLOADING' || t.status === 'UPLOADING');
-    const hasActiveDownload = activeTasks.length > 0 || ytdlpActive;
-
-    // 2. Check active uploads in memory map
-    let hasActiveUpload = false;
-    for (const [gid, upload] of activeUploads.entries()) {
-      if (upload && upload.status === 'UPLOADING') {
-        hasActiveUpload = true;
-        break;
-      }
-    }
-
-    // Strict Pipeline Lock: If downloading OR uploading, DO NOT start next task!
-    if (hasActiveDownload || hasActiveUpload) {
+    if (activeTasks.length > 0) {
       return;
     }
 
@@ -432,7 +471,7 @@ async function processNextQueueItem() {
     nextItem = queue.find(q => q.status === 'QUEUED');
     if (!nextItem) return;
 
-    console.log(`[Queue Engine] Pipeline clear. Launching next queued download (${nextItem.engine || 'aria2'}): "${nextItem.filename || nextItem.custom_name}" (${nextItem.url})`);
+    console.log(`[Queue Engine] 🚀 Pipeline 100% clear. Launching next queued download (${nextItem.engine || 'aria2'}): "${nextItem.filename || nextItem.custom_name}" (${nextItem.url})`);
 
     if (nextItem.engine === 'ytdlp') {
       db.updateQueueItem(nextItem.id, { status: 'DOWNLOADING' });
