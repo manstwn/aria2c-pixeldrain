@@ -149,7 +149,7 @@ async function loadVideoDetails() {
       if (!plyrPlayer) {
         player.src = videoUrl;
         plyrPlayer = new Plyr(player, {
-          controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings', 'pip', 'fullscreen'],
+          controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'settings', 'pip', 'fullscreen'],
           seekTime: 5,
           keyboard: { focused: true, global: true }
         });
