@@ -69,6 +69,12 @@
       pointer-events: auto !important;
       z-index: 100000 !important;
     }
+    /* Hide volume control on mobile phone screens (<768px) for clean UI & full-width progress bar */
+    @media (max-width: 768px) {
+      .plyr__volume {
+        display: none !important;
+      }
+    }
     .watch-layout {
       display: grid;
       grid-template-columns: 1fr 340px;
