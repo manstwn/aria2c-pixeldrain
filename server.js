@@ -7,6 +7,7 @@ require('dotenv').config();
 const db = require('./src/db');
 const auth = require('./src/auth');
 const aria2 = require('./src/aria2');
+const ytdlp = require('./src/ytdlp');
 const touchManager = require('./src/touchManager');
 const logger = require('./src/logger');
 
