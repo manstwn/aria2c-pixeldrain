@@ -23,38 +23,51 @@
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
       max-height: 72vh;
     }
-    /* Floating Vertical Volume Popup */
+    /* Floating Vertical Volume Popup Box */
     .plyr__volume {
       position: relative;
       display: inline-flex;
       align-items: center;
     }
-    .plyr__volume input[type="range"] {
+    .plyr__volume-popup {
       position: absolute !important;
       bottom: 50px !important;
       left: 50% !important;
-      width: 100px !important;
-      height: 26px !important;
-      padding: 4px 8px !important;
-      background: rgba(15, 23, 42, 0.95) !important;
-      backdrop-filter: blur(12px) !important;
-      border: 1px solid rgba(255, 255, 255, 0.18) !important;
-      border-radius: 16px !important;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7) !important;
-      transform: translateX(-50%) rotate(-90deg) !important;
-      transform-origin: center center !important;
+      transform: translateX(-50%) !important;
+      width: 40px !important;
+      height: 120px !important;
+      padding: 12px 6px !important;
+      background: rgba(15, 23, 42, 0.96) !important;
+      backdrop-filter: blur(16px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+      border-radius: 12px !important;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8) !important;
+      display: flex !important;
+      justify-content: center !important;
+      align-items: center !important;
       opacity: 0 !important;
       visibility: hidden !important;
       pointer-events: none !important;
       transition: opacity 0.2s ease, visibility 0.2s ease !important;
-      z-index: 100 !important;
+      z-index: 99999 !important;
     }
-    .plyr__volume.show-vertical-volume input[type="range"],
-    .plyr__volume:hover input[type="range"],
-    .plyr__volume:focus-within input[type="range"] {
+    .plyr__volume.show-vertical-volume .plyr__volume-popup,
+    .plyr__volume:hover .plyr__volume-popup,
+    .plyr__volume:focus-within .plyr__volume-popup {
       opacity: 1 !important;
       visibility: visible !important;
       pointer-events: auto !important;
+    }
+    .plyr__volume-popup input[type="range"] {
+      writing-mode: bt-lr !important; /* Firefox */
+      -webkit-appearance: slider-vertical !important; /* WebKit/Blink */
+      width: 10px !important;
+      height: 96px !important;
+      cursor: pointer !important;
+      outline: none !important;
+      accent-color: #007aff !important;
+      pointer-events: auto !important;
+      z-index: 100000 !important;
     }
     .watch-layout {
       display: grid;

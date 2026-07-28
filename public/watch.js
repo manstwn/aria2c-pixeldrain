@@ -164,6 +164,25 @@ async function loadVideoDetails() {
         plyrPlayer.on('ready', () => {
           const volContainer = document.querySelector('.plyr__volume');
           const muteBtn = document.querySelector('.plyr__volume button[data-plyr="mute"]');
+          const rangeInput = volContainer ? volContainer.querySelector('input[data-plyr="volume"]') : null;
+
+          if (volContainer && rangeInput) {
+            let popup = volContainer.querySelector('.plyr__volume-popup');
+            if (!popup) {
+              popup = document.createElement('div');
+              popup.className = 'plyr__volume-popup';
+              rangeInput.parentNode.insertBefore(popup, rangeInput);
+              popup.appendChild(rangeInput);
+            }
+
+            // Stop pointer/mouse events from bubbling up to video player overlay
+            ['mousedown', 'pointerdown', 'touchstart', 'click'].forEach(evtType => {
+              popup.addEventListener(evtType, (e) => {
+                e.stopPropagation();
+              });
+            });
+          }
+
           if (volContainer && muteBtn) {
             muteBtn.addEventListener('click', (e) => {
               e.preventDefault();
