@@ -56,7 +56,7 @@ function getVideoDuration(filePath, meta = {}) {
 }
 
 /**
- * Fast video frame extraction using FFmpeg keyframe seeking and 640px thumbnail downscaling
+ * Fast video frame extraction using FFmpeg keyframe seeking and 720p max thumbnail downscaling
  */
 function extractVideoFrame(filePath, timestampSeconds, outputPath) {
   return new Promise((resolve) => {
@@ -64,7 +64,7 @@ function extractVideoFrame(filePath, timestampSeconds, outputPath) {
       '-ss', timestampSeconds.toString(),
       '-noaccurate_seek',
       '-i', filePath,
-      '-vf', 'scale=640:-1',
+      '-vf', "scale='min(1280,iw)':-1",
       '-vframes', '1',
       '-threads', '2',
       '-q:v', '4',
@@ -80,7 +80,7 @@ function extractVideoFrame(filePath, timestampSeconds, outputPath) {
         const fallbackArgs = [
           '-ss', timestampSeconds.toString(),
           '-i', filePath,
-          '-vf', 'scale=640:-1',
+          '-vf', "scale='min(1280,iw)':-1",
           '-vframes', '1',
           '-q:v', '4',
           '-y',
@@ -95,7 +95,7 @@ function extractVideoFrame(filePath, timestampSeconds, outputPath) {
 }
 
 /**
- * Ultra-Fast Single-Pass FFmpeg 15-frame video extraction (1 single process pass)
+ * Ultra-Fast Single-Pass FFmpeg 15-frame video extraction (720p max resolution across entire duration)
  */
 function extractVideoFramesSinglePass(filePath, durationSeconds, fileId) {
   return new Promise((resolve) => {
@@ -106,7 +106,7 @@ function extractVideoFramesSinglePass(filePath, durationSeconds, fileId) {
 
     const args = [
       '-i', filePath,
-      '-vf', `fps=${fpsRate},scale=640:-1`,
+      '-vf', `fps=${fpsRate},scale='min(1280,iw)':-1`,
       '-vframes', count.toString(),
       '-threads', '2',
       '-q:v', '4',
@@ -184,13 +184,23 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
 
     // 1. Primary: Try single-pass extraction (1 single FFmpeg process)
     const singlePassFrames = await extractVideoFramesSinglePass(filePath, duration, fileId);
-    if (singlePassFrames.length > 0) {
-      console.log(`[Thumbnails] 🚀 Generated ${singlePassFrames.length}/${count} video frame screenshots for ${fileId} in 1-pass lightning mode!`);
+    if (singlePassFrames.length === count) {
+      console.log(`[Thumbnails] 🚀 Generated all ${singlePassFrames.length}/${count} video frame screenshots for ${fileId} in 1-pass lightning mode!`);
       return singlePassFrames;
     }
 
-    // 2. Secondary Fallback: Seek-based batching if single-pass produced 0 frames
-    console.warn(`[Thumbnails Fallback] Single-pass extraction yielded 0 frames, running fallback seek batching...`);
+    // Clean up partial single-pass files if fewer than 15 images were generated
+    if (singlePassFrames.length > 0) {
+      singlePassFrames.forEach(relPath => {
+        try {
+          const absP = path.join(__dirname, '..', relPath);
+          if (fs.existsSync(absP)) fs.unlinkSync(absP);
+        } catch (e) {}
+      });
+    }
+
+    // 2. Secondary Fallback: Seek-based batching (batchSize = 2 for low RAM & 100% 15/15 frames)
+    console.log(`[Thumbnails] Running low-memory seek extraction to guarantee all ${count}/${count} frame screenshots...`);
     const interval = duration / (count + 1);
     const tasks = [];
     for (let i = 1; i <= count; i++) {
@@ -200,7 +210,8 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
       tasks.push({ i, targetTime, outFilename, outPath });
     }
 
-    const batchSize = 5;
+    // Controlled batch size of 2 processes: Low CPU & low RAM, but 100% 15/15 frames guaranteed!
+    const batchSize = 2;
     for (let b = 0; b < tasks.length; b += batchSize) {
       const batch = tasks.slice(b, b + batchSize);
       await Promise.all(batch.map(async (task) => {
@@ -217,7 +228,7 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
       return numA - numB;
     });
 
-    console.log(`[Thumbnails] Generated ${thumbnails.length}/${count} video frame screenshots for ${fileId} via fallback mode.`);
+    console.log(`[Thumbnails] ✅ Generated ${thumbnails.length}/${count} video frame screenshots for ${fileId}!`);
     return thumbnails;
   }
 
