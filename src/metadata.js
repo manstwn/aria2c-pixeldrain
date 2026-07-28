@@ -391,7 +391,36 @@ function sanitizeVideoFile(filePath) {
       fs.closeSync(fd);
       fd = null;
 
-      console.log(`[Video Sanitizer] ✅ In-place header sanitization complete! Adjusted file size: ${formatBytes(newSize)}.`);
+      console.log(`[Video Sanitizer] ✅ In-place header sanitization complete! Remuxing to Pure Native ISO MP4 (-c copy -movflags +faststart)...`);
+
+      // Remux raw stream into Pure Native ISO MP4 container for instant HTML5 playback
+      const pureMp4Path = `${filePath}.pure.mp4`;
+      try {
+        const ffmpegCmd = `ffmpeg -y -analyzeduration 100M -probesize 100M -i "${filePath}" -c copy -movflags +faststart "${pureMp4Path}"`;
+        execSync(ffmpegCmd, { timeout: 600000, stdio: 'ignore' });
+
+        if (fs.existsSync(pureMp4Path) && fs.statSync(pureMp4Path).size > 1000) {
+          fs.rmSync(filePath, { force: true });
+          fs.renameSync(pureMp4Path, filePath);
+          console.log(`[Video Sanitizer] 🎬 Successfully created Pure Native ISO MP4 video for ${path.basename(filePath)}!`);
+        } else {
+          // Fallback encoder if stream copy is incompatible
+          const fallbackCmd = `ffmpeg -y -analyzeduration 100M -probesize 100M -i "${filePath}" -c:v libx264 -preset ultrafast -crf 23 -c:a aac -movflags +faststart "${pureMp4Path}"`;
+          execSync(fallbackCmd, { timeout: 600000, stdio: 'ignore' });
+          if (fs.existsSync(pureMp4Path) && fs.statSync(pureMp4Path).size > 1000) {
+            fs.rmSync(filePath, { force: true });
+            fs.renameSync(pureMp4Path, filePath);
+            console.log(`[Video Sanitizer] 🎬 Successfully created Pure Native MP4 via fallback encoder!`);
+          }
+        }
+      } catch (remuxErr) {
+        console.warn(`[Video Sanitizer] Remux warning: ${remuxErr.message}`);
+      } finally {
+        if (fs.existsSync(pureMp4Path)) {
+          try { fs.rmSync(pureMp4Path, { force: true }); } catch (e) {}
+        }
+      }
+
       return filePath;
     }
   } catch (err) {
