@@ -23,6 +23,28 @@
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
       max-height: 72vh;
     }
+    /* Collapsible Volume Control: Show volume slider on click / hover */
+    .plyr__volume {
+      display: flex;
+      align-items: center;
+      position: relative;
+    }
+    .plyr__volume input[type="range"] {
+      max-width: 0 !important;
+      opacity: 0 !important;
+      margin-left: 0 !important;
+      padding: 0 !important;
+      pointer-events: none !important;
+      transition: max-width 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, margin 0.25s ease !important;
+    }
+    .plyr__volume:hover input[type="range"],
+    .plyr__volume:focus-within input[type="range"],
+    .plyr__volume.show-slider input[type="range"] {
+      max-width: 90px !important;
+      opacity: 1 !important;
+      margin-left: 8px !important;
+      pointer-events: auto !important;
+    }
     .watch-layout {
       display: grid;
       grid-template-columns: 1fr 340px;

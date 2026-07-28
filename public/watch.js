@@ -153,6 +153,16 @@ async function loadVideoDetails() {
           seekTime: 5,
           keyboard: { focused: true, global: true }
         });
+
+        plyrPlayer.on('ready', () => {
+          const volContainer = document.querySelector('.plyr__volume');
+          const muteBtn = document.querySelector('.plyr__volume button[data-plyr="mute"]');
+          if (volContainer && muteBtn) {
+            muteBtn.addEventListener('click', (e) => {
+              volContainer.classList.toggle('show-slider');
+            });
+          }
+        });
       } else {
         plyrPlayer.source = {
           type: 'video',
