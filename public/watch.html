@@ -52,6 +52,57 @@
       0% { opacity: 0.7; }
       100% { opacity: 1; }
     }
+    /* Watch Page Thumbnail Grid */
+    .watch-gallery-section {
+      background: rgba(15, 23, 42, 0.5);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-stroke, rgba(255, 255, 255, 0.1));
+      border-radius: var(--radius-lg, 12px);
+      padding: 16px;
+    }
+    .watch-thumb-grid {
+      display: grid;
+      grid-template-columns: repeat(var(--watch-thumb-cols, 5), 1fr);
+      gap: 10px;
+    }
+    @media (max-width: 768px) {
+      .watch-thumb-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+      }
+    }
+    .watch-thumb-card {
+      position: relative;
+      border-radius: 8px;
+      overflow: hidden;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      display: block;
+    }
+    .watch-thumb-card:hover {
+      transform: translateY(-3px);
+      border-color: #007aff;
+      box-shadow: 0 6px 16px rgba(0, 122, 255, 0.3);
+    }
+    .watch-thumb-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .watch-thumb-card .thumb-badge {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      background: rgba(0, 0, 0, 0.75);
+      color: #fff;
+      font-size: 0.65rem;
+      font-family: var(--font-mono, monospace);
+      padding: 1px 5px;
+      border-radius: 4px;
+      backdrop-filter: blur(4px);
+    }
     /* Hide volume control on mobile phone screens (<768px) for full-width progress bar */
     @media (max-width: 768px) {
       .plyr__volume {
@@ -246,6 +297,30 @@
             </div>
             <div style="display: flex; gap: 8px;">
               <button class="btn-table-action" onclick="copyStreamLink()" title="Copy stream URL">📋 Copy Stream Link</button>
+            </div>
+          </div>
+
+          <!-- Screenshot Frame Gallery Section Under Title -->
+          <div id="watchGallerySection" class="watch-gallery-section hidden" style="margin-top: 20px;">
+            <div class="flex-between" style="margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+              <h3 style="font-size: 1rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                <span class="material-symbols-outlined" style="color: var(--color-electric-blue); font-size: 20px;">collections</span>
+                Screenshot Frame Gallery (<span id="watchThumbCount">0</span> frames)
+              </h3>
+
+              <div class="page-size-selector" style="display: flex; align-items: center; gap: 6px;">
+                <label for="watchGridColsSelect" style="font-size: 0.8rem;">Grid:</label>
+                <select id="watchGridColsSelect" onchange="changeWatchGridColumns(this.value)" class="glow-input" style="padding: 3px 8px; font-size: 0.8rem;">
+                  <option value="3">3 Grid</option>
+                  <option value="4">4 Grid</option>
+                  <option value="5" selected>5 Grid</option>
+                  <option value="6">6 Grid</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="watchThumbnailsGrid" class="watch-thumb-grid">
+              <!-- Rendered via Javascript -->
             </div>
           </div>
 

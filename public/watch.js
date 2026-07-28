@@ -210,10 +210,47 @@ async function loadVideoDetails() {
       externalLink.href = currentFile.download_url;
     }
 
+    // Restore or set Watch Gallery Grid Columns (Default: 5 cols on PC)
+    const savedCols = localStorage.getItem('watch_grid_cols') || '5';
+    const gridSelect = document.getElementById('watchGridColsSelect');
+    if (gridSelect) gridSelect.value = savedCols;
+    changeWatchGridColumns(savedCols);
+
+    // Populate Screenshot Frames Gallery Grid Under Title
+    const thumbs = currentFile.thumbnails || [];
+    const countEl = document.getElementById('watchThumbCount');
+    if (countEl) countEl.textContent = thumbs.length;
+
+    const gridEl = document.getElementById('watchThumbnailsGrid');
+    const gallerySection = document.getElementById('watchGallerySection');
+
+    if (gridEl) {
+      if (thumbs.length > 0) {
+        if (gallerySection) gallerySection.classList.remove('hidden');
+        gridEl.innerHTML = thumbs.map((url, idx) => `
+          <a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="watch-thumb-card" title="View Frame #${idx + 1} full size">
+            <img src="${escapeHtml(url)}" alt="Frame #${idx + 1}" loading="lazy" />
+            <span class="thumb-badge">#${idx + 1}</span>
+          </a>
+        `).join('');
+      } else {
+        if (gallerySection) gallerySection.classList.add('hidden');
+      }
+    }
+
   } catch (err) {
     console.error('Error loading video details:', err);
     showToast('Failed to load video details', 'error');
   }
+}
+
+function changeWatchGridColumns(cols) {
+  const numCols = parseInt(cols, 10) || 5;
+  const grid = document.getElementById('watchThumbnailsGrid');
+  if (grid) {
+    grid.style.setProperty('--watch-thumb-cols', numCols);
+  }
+  localStorage.setItem('watch_grid_cols', numCols);
 }
 
 /* ==========================================================================

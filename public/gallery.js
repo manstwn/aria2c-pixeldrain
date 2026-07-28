@@ -165,6 +165,7 @@ async function fetchFiles() {
     }
     const data = await res.json();
     ledgerFiles = data.files || [];
+    restoreGalleryViewState();
     updateGalleryTagFilterSelect();
     renderGalleryPage();
   } catch (err) {
@@ -176,11 +177,36 @@ async function fetchFiles() {
 
 let galleryCurrentPage = parseInt(sessionStorage.getItem('gallery_current_page') || '1', 10);
 let galleryPageSize = parseInt(localStorage.getItem('gallery_page_size') || '12', 10);
-let activeGalleryTagFilter = 'ALL';
+let activeGalleryTagFilter = sessionStorage.getItem('gallery_tag_filter') || 'ALL';
 
 function saveGalleryViewState() {
   sessionStorage.setItem('gallery_current_page', galleryCurrentPage);
   sessionStorage.setItem('gallery_scroll_pos', window.scrollY || window.pageYOffset || 0);
+
+  const searchInput = document.getElementById('gallerySearchInput');
+  if (searchInput) sessionStorage.setItem('gallery_search', searchInput.value || '');
+
+  const tagSelect = document.getElementById('galleryTagFilterSelect');
+  if (tagSelect) sessionStorage.setItem('gallery_tag_filter', tagSelect.value || 'ALL');
+
+  const sortSelect = document.getElementById('gallerySortSelect');
+  if (sortSelect) sessionStorage.setItem('gallery_sort', sortSelect.value || 'newest');
+}
+
+function restoreGalleryViewState() {
+  const savedPage = sessionStorage.getItem('gallery_current_page');
+  if (savedPage) galleryCurrentPage = parseInt(savedPage, 10) || 1;
+
+  const savedTag = sessionStorage.getItem('gallery_tag_filter');
+  if (savedTag) activeGalleryTagFilter = savedTag;
+
+  const searchInput = document.getElementById('gallerySearchInput');
+  const savedSearch = sessionStorage.getItem('gallery_search');
+  if (searchInput && savedSearch !== null) searchInput.value = savedSearch;
+
+  const sortSelect = document.getElementById('gallerySortSelect');
+  const savedSort = sessionStorage.getItem('gallery_sort');
+  if (sortSelect && savedSort) sortSelect.value = savedSort;
 }
 
 function changeGalleryPageSize(val) {
@@ -195,6 +221,7 @@ function changeGalleryTagFilter(val) {
   activeGalleryTagFilter = val;
   galleryCurrentPage = 1;
   sessionStorage.setItem('gallery_current_page', galleryCurrentPage);
+  sessionStorage.setItem('gallery_tag_filter', val);
   renderGalleryPage();
 }
 
@@ -208,7 +235,8 @@ function updateGalleryTagFilterSelect() {
   const select = document.getElementById('galleryTagFilterSelect');
   if (!select) return;
 
-  const currentVal = select.value || 'ALL';
+  const savedTag = sessionStorage.getItem('gallery_tag_filter');
+  const currentVal = select.value || savedTag || 'ALL';
   const allUniqueTags = Array.from(new Set(ledgerFiles.flatMap(f => f.tags || []).filter(Boolean)));
 
   select.innerHTML = `<option value="ALL">All Tags</option>` + allUniqueTags.map(tag => `
@@ -217,6 +245,7 @@ function updateGalleryTagFilterSelect() {
 
   if (allUniqueTags.includes(currentVal)) {
     select.value = currentVal;
+    activeGalleryTagFilter = currentVal;
   } else {
     select.value = 'ALL';
     activeGalleryTagFilter = 'ALL';
