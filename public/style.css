@@ -1859,6 +1859,9 @@ input:focus {
   .app-topbar .header-right {
     gap: 4px;
   }
+  .header-nav-links {
+    display: none !important;
+  }
   .status-indicator-pill {
     padding: 3px 8px;
     font-size: 0.675rem;
