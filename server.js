@@ -442,7 +442,24 @@ function streamVideoFromPixeldrain(targetUrl, headers, req, res, depth = 0) {
     }
 
     logger.debug(`[Video Proxy Piping] Streaming bytes to client response (Status ${proxyRes.statusCode})...`);
-    proxyRes.pipe(res);
+
+    // On-the-fly fake PNG header stripping for video player stream
+    let checkedHeader = false;
+    const headerTransform = new (require('stream').Transform)({
+      transform(chunk, encoding, callback) {
+        if (!checkedHeader) {
+          checkedHeader = true;
+          if (chunk.length >= 8 && chunk.toString('hex', 0, 8) === '89504e470d0a1a0a') {
+            logger.debug('[Video Proxy Stream] ⚡ On-the-fly stripped fake 74-byte PNG header for client video player!');
+            callback(null, chunk.slice(74));
+            return;
+          }
+        }
+        callback(null, chunk);
+      }
+    });
+
+    proxyRes.pipe(headerTransform).pipe(res);
   });
 
   proxyReq.on('error', (err) => {
