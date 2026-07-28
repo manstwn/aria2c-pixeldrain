@@ -2054,3 +2054,10 @@ input:focus {
   color: #ff2a4b;
   background: rgba(244, 63, 94, 0.2);
 }
+
+/* Hide Grid selector on mobile phone screens (<768px) */
+@media (max-width: 768px) {
+  .grid-selector-mobile-hide {
+    display: none !important;
+  }
+}

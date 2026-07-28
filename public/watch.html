@@ -103,9 +103,10 @@
       border-radius: 4px;
       backdrop-filter: blur(4px);
     }
-    /* Hide volume control on mobile phone screens (<768px) for full-width progress bar */
+    /* Hide volume control and grid selector on mobile phone screens (<768px) */
     @media (max-width: 768px) {
-      .plyr__volume {
+      .plyr__volume,
+      .grid-selector-mobile-hide {
         display: none !important;
       }
     }
@@ -293,10 +294,6 @@
           <div class="watch-title-bar">
             <div>
               <h2 id="videoTitle" class="watch-video-title">Loading video title...</h2>
-              <p id="videoSub" class="section-desc" style="margin-top: 4px;">Direct Stream via Express Proxy Engine</p>
-            </div>
-            <div style="display: flex; gap: 8px;">
-              <button class="btn-table-action" onclick="copyStreamLink()" title="Copy stream URL">📋 Copy Stream Link</button>
             </div>
           </div>
 
@@ -305,10 +302,10 @@
             <div class="flex-between" style="margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
               <h3 style="font-size: 1rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
                 <span class="material-symbols-outlined" style="color: var(--color-electric-blue); font-size: 20px;">collections</span>
-                Screenshot Frame Gallery (<span id="watchThumbCount">0</span> frames)
+                Preview (<span id="watchThumbCount">0</span>)
               </h3>
 
-              <div class="page-size-selector" style="display: flex; align-items: center; gap: 6px;">
+              <div class="page-size-selector grid-selector-mobile-hide" style="display: flex; align-items: center; gap: 6px;">
                 <label for="watchGridColsSelect" style="font-size: 0.8rem;">Grid:</label>
                 <select id="watchGridColsSelect" onchange="changeWatchGridColumns(this.value)" class="glow-input" style="padding: 3px 8px; font-size: 0.8rem;">
                   <option value="3">3 Grid</option>
