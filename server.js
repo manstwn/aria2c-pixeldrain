@@ -423,8 +423,6 @@ function streamVideoFromPixeldrain(targetUrl, headers, req, res, depth = 0) {
 
     const headersToForward = [
       'content-type',
-      'content-length',
-      'content-range',
       'accept-ranges',
       'last-modified',
       'cache-control',
@@ -443,7 +441,6 @@ function streamVideoFromPixeldrain(targetUrl, headers, req, res, depth = 0) {
 
     logger.debug(`[Video Proxy Piping] Streaming bytes to client response (Status ${proxyRes.statusCode})...`);
 
-    // Ultra-verbose on-the-fly byte inspector and PNG header stripper
     let checkedHeader = false;
     const headerTransform = new (require('stream').Transform)({
       transform(chunk, encoding, callback) {
@@ -457,14 +454,27 @@ function streamVideoFromPixeldrain(targetUrl, headers, req, res, depth = 0) {
           if (chunk.length >= 8 && hexHeader.startsWith('89504e470d0a1a0a')) {
             logger.debug('[Video Proxy Inspector] ⚡ FAKE PNG HEADER DETECTED! Stripping 74-byte header on-the-fly...');
             const cleanChunk = chunk.slice(74);
-            const cleanSampleLen = Math.min(16, cleanChunk.length);
-            const cleanHex = cleanChunk.toString('hex', 0, cleanSampleLen);
-            const cleanAscii = cleanChunk.toString('ascii', 0, cleanSampleLen).replace(/[^\x20-\x7E]/g, '.');
-            logger.debug(`[Video Proxy Inspector] Stripped Chunk Byte 0 -> Hex: ${cleanHex} | ASCII: ${cleanAscii}`);
+
+            if (proxyRes.headers['content-length']) {
+              const adjustedLen = Math.max(0, parseInt(proxyRes.headers['content-length'], 10) - 74);
+              res.setHeader('content-length', adjustedLen);
+            }
+            if (proxyRes.headers['content-range']) {
+              const crMatch = proxyRes.headers['content-range'].match(/bytes\s+(\d+)-(\d+)\/(\d+|\*)/);
+              if (crMatch) {
+                const s = Math.max(0, parseInt(crMatch[1], 10));
+                const e = Math.max(0, parseInt(crMatch[2], 10) - 74);
+                const t = crMatch[3] === '*' ? '*' : Math.max(0, parseInt(crMatch[3], 10) - 74);
+                res.setHeader('content-range', `bytes ${s}-${e}/${t}`);
+              }
+            }
+
             callback(null, cleanChunk);
             return;
           } else {
             logger.debug(`[Video Proxy Inspector] Stream Byte 0 is clean. Forwarding raw stream directly to player.`);
+            if (proxyRes.headers['content-length']) res.setHeader('content-length', proxyRes.headers['content-length']);
+            if (proxyRes.headers['content-range']) res.setHeader('content-range', proxyRes.headers['content-range']);
           }
         }
         callback(null, chunk);
