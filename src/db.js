@@ -107,6 +107,7 @@ function addFile(record) {
     custom_name: record.custom_name || '',
     original_filename: record.original_filename || record.filename || '',
     source_url: record.source_url || '',
+    engine: record.engine || (record.metadata && record.metadata.engine) || 'aria2',
     pixeldrain_id: record.pixeldrain_id || '',
     download_url: record.download_url || '',
     admin_code: record.admin_code || '',

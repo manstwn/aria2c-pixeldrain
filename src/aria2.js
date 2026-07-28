@@ -360,7 +360,7 @@ async function pollCompletedDownloads() {
           if (qItem && progressData.status) {
             db.updateQueueItem(qItem.id, { status: progressData.status });
           }
-        }, sourceUrlStr)
+        }, sourceUrlStr, 'aria2')
           .then(record => {
             console.log(`[Aria2 Pipeline] ✅ Task ${task.gid} 100% finished (Download -> Upload -> Thumbnails -> Cleanup).`);
             activeUploads.set(task.gid, { filename, status: 'UPLOADED', record, uploadProgress: 100 });

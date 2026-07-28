@@ -236,7 +236,7 @@ function startDownload(qItem, onComplete, onError) {
         try {
           const record = await pixeldrain.uploadToPixeldrain(targetFilePath, filename, (progressData) => {
             Object.assign(taskState, progressData);
-          }, qItem.url);
+          }, qItem.url, 'ytdlp');
 
           taskState.status = 'UPLOADED';
           db.removeFromQueue(gid);

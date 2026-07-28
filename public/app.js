@@ -757,8 +757,17 @@ function renderLedger() {
       const catIcon = cat === 'video' ? '🎬' : cat === 'image' ? '🖼️' : cat === 'audio' ? '🎵' : cat === 'archive' ? '📦' : '📄';
 
       const displayName = file.custom_name || file.filename;
-      const methodStr = file.engine || file.method || (file.metadata && file.metadata.engine) || 'aria2c';
-      const methodRow = `<div class="method-name-row" style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px;" title="Download Method">⚡ Method: ${escapeHtml(methodStr)}</div>`;
+      let rawEngine = file.engine || file.method || (file.metadata && file.metadata.engine);
+      if (!rawEngine) {
+        const src = (file.source_url || '').toLowerCase();
+        if (src.includes('youtube.com') || src.includes('youtu.be') || src.includes('tiktok') || src.includes('instagram') || src.includes('xvideos') || src.includes('pornhub')) {
+          rawEngine = 'ytdlp';
+        } else {
+          rawEngine = 'aria2';
+        }
+      }
+      const engineLabel = rawEngine === 'ytdlp' ? '🎥 yt-dlp' : '⚡ aria2';
+      const methodRow = `<div class="method-name-row" style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px;" title="Download Method">Method: <strong style="color: ${rawEngine === 'ytdlp' ? '#c084fc' : '#60a5fa'};">${escapeHtml(engineLabel)}</strong></div>`;
 
       let sizeStr = '';
       if (meta.size_formatted && meta.size_formatted !== 'N/A') {

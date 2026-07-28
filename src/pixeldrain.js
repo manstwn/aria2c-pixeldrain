@@ -15,8 +15,9 @@ const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
  * @param {string} overrideFilename Optional custom filename
  * @param {function} onProgress Optional progress callback
  * @param {string} sourceUrl Optional original remote URL
+ * @param {string} engine Optional download engine ('ytdlp' or 'aria2')
  */
-function uploadToPixeldrain(filePath, overrideFilename, onProgress = null, sourceUrl = '') {
+function uploadToPixeldrain(filePath, overrideFilename, onProgress = null, sourceUrl = '', engine = 'aria2') {
   let activeFileStream = null;
   let activeReq = null;
   let isAborted = false;
@@ -174,6 +175,7 @@ function uploadToPixeldrain(filePath, overrideFilename, onProgress = null, sourc
         custom_name: (filename && filename !== originalFilename) ? filename : '',
         original_filename: originalFilename,
         source_url: sourceUrl || '',
+        engine: engine || 'aria2',
         pixeldrain_id: fileId,
         download_url: downloadPage,
         created_at: now,
