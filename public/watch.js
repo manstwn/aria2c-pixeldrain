@@ -186,6 +186,7 @@ async function loadVideoDetails() {
     };
 
     // Populate Under-Title Meta Sub: duration - resolution - size
+    const meta = currentFile.metadata || {};
     const metaParts = [];
     const durStr = meta.duration_formatted || (meta.duration_seconds ? `${meta.duration_seconds}s` : '');
     const resStr = meta.resolution || (meta.width && meta.height ? `${meta.width}x${meta.height}` : '');
