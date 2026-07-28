@@ -140,11 +140,14 @@ async function loadVideoDetails() {
     document.title = `${displayName} | PixelTouch Cinema`;
     document.getElementById('videoTitle').textContent = displayName;
 
-    // Set up Video Source via Proxy Endpoint with HLS.js support for MPEG-TS & MP4 streams
+    // Set up Video Source via Proxy Endpoint
     const videoUrl = `/api/video/${currentFile.id}`;
     const player = document.getElementById('mainVideoPlayer');
 
-    if (window.Hls && Hls.isSupported()) {
+    const sourceUrl = (currentFile.source_url || '').toLowerCase();
+    const isM3u8 = sourceUrl.includes('.m3u8');
+
+    if (isM3u8 && window.Hls && Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true
@@ -153,14 +156,13 @@ async function loadVideoDetails() {
       hls.attachMedia(player);
       hls.on(Hls.Events.ERROR, function (event, data) {
         if (data.fatal) {
-          console.warn('[HLS.js] Fatal error on stream, attempting native fallback:', data);
+          console.warn('[HLS.js] Fatal error on stream, falling back to native player:', data);
           hls.destroy();
           player.src = videoUrl;
         }
       });
-    } else if (player.canPlayType('application/vnd.apple.mpegurl')) {
-      player.src = videoUrl;
     } else {
+      // Native HTML5 Video Player for MP4 videos
       player.src = videoUrl;
     }
 
