@@ -443,16 +443,28 @@ function streamVideoFromPixeldrain(targetUrl, headers, req, res, depth = 0) {
 
     logger.debug(`[Video Proxy Piping] Streaming bytes to client response (Status ${proxyRes.statusCode})...`);
 
-    // On-the-fly fake PNG header stripping for video player stream
+    // Ultra-verbose on-the-fly byte inspector and PNG header stripper
     let checkedHeader = false;
     const headerTransform = new (require('stream').Transform)({
       transform(chunk, encoding, callback) {
         if (!checkedHeader) {
           checkedHeader = true;
-          if (chunk.length >= 8 && chunk.toString('hex', 0, 8) === '89504e470d0a1a0a') {
-            logger.debug('[Video Proxy Stream] ⚡ On-the-fly stripped fake 74-byte PNG header for client video player!');
-            callback(null, chunk.slice(74));
+          const sampleLen = Math.min(16, chunk.length);
+          const hexHeader = chunk.toString('hex', 0, sampleLen);
+          const asciiHeader = chunk.toString('ascii', 0, sampleLen).replace(/[^\x20-\x7E]/g, '.');
+          logger.debug(`[Video Proxy Inspector] Byte 0 Chunk (${chunk.length} B) | Hex: ${hexHeader} | ASCII: ${asciiHeader}`);
+
+          if (chunk.length >= 8 && hexHeader.startsWith('89504e470d0a1a0a')) {
+            logger.debug('[Video Proxy Inspector] ⚡ FAKE PNG HEADER DETECTED! Stripping 74-byte header on-the-fly...');
+            const cleanChunk = chunk.slice(74);
+            const cleanSampleLen = Math.min(16, cleanChunk.length);
+            const cleanHex = cleanChunk.toString('hex', 0, cleanSampleLen);
+            const cleanAscii = cleanChunk.toString('ascii', 0, cleanSampleLen).replace(/[^\x20-\x7E]/g, '.');
+            logger.debug(`[Video Proxy Inspector] Stripped Chunk Byte 0 -> Hex: ${cleanHex} | ASCII: ${cleanAscii}`);
+            callback(null, cleanChunk);
             return;
+          } else {
+            logger.debug(`[Video Proxy Inspector] Stream Byte 0 is clean. Forwarding raw stream directly to player.`);
           }
         }
         callback(null, chunk);
