@@ -400,7 +400,7 @@ function renderGalleryPage() {
     const resTag = formatResolutionTag(meta);
     const durationText = meta.duration_formatted || (meta.duration_seconds ? `${meta.duration_seconds}s` : '');
 
-    let topBadgeHTML = '<div style="position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 5;">';
+    let topBadgeHTML = '<div class="gallery-cover-badges">';
     if (resTag) {
       topBadgeHTML += `<span class="gallery-cover-badge">${escapeHtml(resTag)}</span>`;
     }
