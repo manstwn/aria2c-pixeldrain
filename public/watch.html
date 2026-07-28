@@ -23,6 +23,39 @@
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
       max-height: 72vh;
     }
+    /* Floating Vertical Volume Popup */
+    .plyr__volume {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+    .plyr__volume input[type="range"] {
+      position: absolute !important;
+      bottom: 50px !important;
+      left: 50% !important;
+      width: 100px !important;
+      height: 26px !important;
+      padding: 4px 8px !important;
+      background: rgba(15, 23, 42, 0.95) !important;
+      backdrop-filter: blur(12px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.18) !important;
+      border-radius: 16px !important;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7) !important;
+      transform: translateX(-50%) rotate(-90deg) !important;
+      transform-origin: center center !important;
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      transition: opacity 0.2s ease, visibility 0.2s ease !important;
+      z-index: 100 !important;
+    }
+    .plyr__volume.show-vertical-volume input[type="range"],
+    .plyr__volume:hover input[type="range"],
+    .plyr__volume:focus-within input[type="range"] {
+      opacity: 1 !important;
+      visibility: visible !important;
+      pointer-events: auto !important;
+    }
     .watch-layout {
       display: grid;
       grid-template-columns: 1fr 340px;

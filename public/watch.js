@@ -22,6 +22,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   setupKeyboardShortcuts();
+
+  document.addEventListener('click', (e) => {
+    const volContainer = document.querySelector('.plyr__volume');
+    if (volContainer && !volContainer.contains(e.target)) {
+      volContainer.classList.remove('show-vertical-volume');
+    }
+  });
 });
 
 function updatePinDots() {
@@ -149,9 +156,21 @@ async function loadVideoDetails() {
       if (!plyrPlayer) {
         player.src = videoUrl;
         plyrPlayer = new Plyr(player, {
-          controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'settings', 'pip', 'fullscreen'],
+          controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings', 'pip', 'fullscreen'],
           seekTime: 5,
           keyboard: { focused: true, global: true }
+        });
+
+        plyrPlayer.on('ready', () => {
+          const volContainer = document.querySelector('.plyr__volume');
+          const muteBtn = document.querySelector('.plyr__volume button[data-plyr="mute"]');
+          if (volContainer && muteBtn) {
+            muteBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              volContainer.classList.toggle('show-vertical-volume');
+            }, true);
+          }
         });
       } else {
         plyrPlayer.source = {
