@@ -332,10 +332,81 @@ function removeDownload(gid) {
   }
 }
 
+/**
+ * Forcibly kill ALL active yt-dlp child processes and abort in-flight uploads
+ */
+function killAllActiveYtDlpProcesses() {
+  console.log(`[yt-dlp Shutdown] Terminating ${activeTasks.size} active yt-dlp task(s)...`);
+  for (const [gid, task] of activeTasks.entries()) {
+    if (task.process) {
+      try {
+        task.process.kill('SIGKILL');
+        console.log(`[yt-dlp Shutdown] Killed process for task ${gid}`);
+      } catch (e) {}
+    }
+    if (task.uploadTaskPromise && task.uploadTaskPromise.abort) {
+      try { task.uploadTaskPromise.abort(); } catch (e) {}
+    }
+    if (task.filePath && fs.existsSync(task.filePath)) {
+      try { fs.rmSync(task.filePath, { recursive: true, force: true }); } catch (e) {}
+    }
+  }
+  activeTasks.clear();
+
+  // Also kill any orphaned yt-dlp OS processes
+  try {
+    const { execSync } = require('child_process');
+    if (process.platform === 'win32') {
+      execSync('taskkill /F /IM yt-dlp.exe /T', { stdio: 'ignore' });
+    } else {
+      execSync('pkill -9 -f yt-dlp', { stdio: 'ignore' });
+    }
+  } catch (e) {}
+}
+
+/**
+ * Scan downloads folder and purge all leftover temporary/partial files (.part, .ytdl, .aria2, .temp)
+ */
+function cleanUpOrphanedTempFiles() {
+  try {
+    const downloadsDir = path.resolve(DOWNLOADS_DIR);
+    if (!fs.existsSync(downloadsDir)) return;
+
+    const files = fs.readdirSync(downloadsDir);
+    let count = 0;
+    for (const f of files) {
+      const fullPath = path.join(downloadsDir, f);
+      if (
+        f.endsWith('.part') ||
+        f.endsWith('.ytdl') ||
+        f.endsWith('.aria2') ||
+        f.endsWith('.temp') ||
+        f.includes('.f1') ||
+        f.includes('.f2') ||
+        f.includes('.f3') ||
+        f.includes('.f4')
+      ) {
+        try {
+          fs.rmSync(fullPath, { recursive: true, force: true });
+          count++;
+          console.log(`[Disk Cleanup] Purged orphaned temp file: ${f}`);
+        } catch (e) {}
+      }
+    }
+    if (count > 0) {
+      console.log(`[Disk Cleanup] Total ${count} orphaned temporary file(s) purged from disk.`);
+    }
+  } catch (err) {
+    console.warn(`[Disk Cleanup Warning] Error purging temp files:`, err.message);
+  }
+}
+
 module.exports = {
   findYtDlpExecutable,
   getDownloadsStatus,
   startDownload,
   removeDownload,
+  killAllActiveYtDlpProcesses,
+  cleanUpOrphanedTempFiles,
   activeTasks
 };

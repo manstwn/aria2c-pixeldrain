@@ -525,20 +525,42 @@ app.listen(PORT, '0.0.0.0', () => {
   aria2.startMonitor();
   touchManager.initScheduler();
 
-  // On startup: purge active tasks from aria2 RPC daemon & wipe cache directory
+  // On startup: kill leftover OS child processes & wipe temporary files from disk
   setTimeout(async () => {
+    ytdlp.killAllActiveYtDlpProcesses();
+    ytdlp.cleanUpOrphanedTempFiles();
     await aria2.wipeAllAria2Tasks();
 
-    // Reset any stuck DOWNLOADING queue items back to PAUSED
+    // Reset any stuck DOWNLOADING or UPLOADING queue items back to PAUSED
     const queue = db.getAllQueue();
-    const stuckItems = queue.filter(q => q.status === 'DOWNLOADING');
+    const stuckItems = queue.filter(q => q.status === 'DOWNLOADING' || q.status === 'UPLOADING' || q.status === 'PROCESSING');
     if (stuckItems.length > 0) {
-      console.log(`[Queue Engine] Setting ${stuckItems.length} stuck DOWNLOADING item(s) to PAUSED (Interrupted by runtime restart)...`);
+      console.log(`[Queue Engine] Setting ${stuckItems.length} interrupted task(s) to PAUSED (Interrupted by runtime restart)...`);
       stuckItems.forEach(item => db.updateQueueItem(item.id, { 
         status: 'PAUSED', 
         gid: '', 
-        error: 'Interrupted by runtime restart. Requires manual start.' 
+        error: 'Interrupted by runtime restart. Requires manual retry.' 
       }));
     }
   }, 1500);
 });
+
+/**
+ * Graceful Shutdown Handlers:
+ * Ensures Node.js kills all yt-dlp/ffmpeg child processes and wipes temp files when stopped (Ctrl+C, PM2 stop, SIGTERM)
+ */
+function handleGracefulShutdown(signal) {
+  console.log(`\n[Server Shutdown] Received ${signal}. Terminating child processes and cleaning disk...`);
+  try {
+    ytdlp.killAllActiveYtDlpProcesses();
+    ytdlp.cleanUpOrphanedTempFiles();
+  } catch (e) {}
+
+  setTimeout(() => {
+    process.exit(0);
+  }, 500);
+}
+
+process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
+process.on('SIGHUP', () => handleGracefulShutdown('SIGHUP'));
