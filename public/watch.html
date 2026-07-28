@@ -403,6 +403,30 @@
 
   </div>
 
+  <!-- WATCH IMAGE PREVIEW LIGHTBOX MODAL -->
+  <div id="watchModal" class="auth-overlay hidden" onclick="if(event.target===this) closeWatchModal()">
+    <div class="auth-card glass-panel" style="max-width: 900px; width: 92vw; text-align: center; padding: 20px; position: relative;">
+      <button type="button" class="btn-copy-mini" onclick="closeWatchModal()" style="position: absolute; top: 16px; right: 16px; font-size: 1.4rem; z-index: 10;" title="Close Modal">✕</button>
+
+      <div style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="watchModalTitle">
+        Frame Preview
+      </div>
+
+      <div style="position: relative; display: flex; align-items: center; justify-content: center; min-height: 300px; max-height: 75vh; background: #000; border-radius: 8px; overflow: hidden; border: 1px solid var(--glass-stroke);">
+        <button type="button" onclick="navigateWatchModal(-1)" class="btn-page-nav" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); z-index: 10; font-size: 1.2rem; padding: 10px 14px; background: rgba(0,0,0,0.65);" title="Previous Frame (Left Arrow)">❮</button>
+
+        <img id="watchModalImage" src="" alt="Full size preview frame" style="max-width: 100%; max-height: 72vh; object-fit: contain; display: block;" />
+
+        <button type="button" onclick="navigateWatchModal(1)" class="btn-page-nav" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 10; font-size: 1.2rem; padding: 10px 14px; background: rgba(0,0,0,0.65);" title="Next Frame (Right Arrow)">❯</button>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
+        <span id="watchModalCounter" style="font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-muted);">Frame 1 of 15</span>
+        <a id="watchModalDownload" href="#" target="_blank" rel="noopener" class="btn-table-action primary" style="font-size: 0.775rem; text-decoration: none;">🔍 Open Original File</a>
+      </div>
+    </div>
+  </div>
+
   <!-- TOAST NOTIFICATION SYSTEM -->
   <div id="toastContainer" class="toast-container"></div>
 

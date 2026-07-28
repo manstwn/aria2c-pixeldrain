@@ -243,10 +243,9 @@ async function loadVideoDetails() {
       if (thumbs.length > 0) {
         if (gallerySection) gallerySection.classList.remove('hidden');
         gridEl.innerHTML = thumbs.map((url, idx) => `
-          <a href="${escapeHtml(url)}" target="_blank" rel="noopener" class="watch-thumb-card" title="View Frame #${idx + 1} full size">
+          <div class="watch-thumb-card" onclick="openWatchModal(${idx})" title="Click to view Frame #${idx + 1}">
             <img src="${escapeHtml(url)}" alt="Frame #${idx + 1}" loading="lazy" />
-            <span class="thumb-badge">#${idx + 1}</span>
-          </a>
+          </div>
         `).join('');
       } else {
         if (gallerySection) gallerySection.classList.add('hidden');
@@ -283,11 +282,78 @@ function toggleWatchPreviewSection() {
 }
 
 /* ==========================================================================
+   WATCH IMAGE PREVIEW LIGHTBOX MODAL
+   ========================================================================== */
+
+let watchModalIndex = 0;
+
+function openWatchModal(index) {
+  const thumbs = (currentFile && currentFile.thumbnails) ? currentFile.thumbnails : [];
+  if (!thumbs || thumbs.length === 0) return;
+
+  watchModalIndex = Math.max(0, Math.min(index, thumbs.length - 1));
+  updateWatchModalContent();
+
+  const modal = document.getElementById('watchModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeWatchModal() {
+  const modal = document.getElementById('watchModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function navigateWatchModal(delta) {
+  const thumbs = (currentFile && currentFile.thumbnails) ? currentFile.thumbnails : [];
+  if (!thumbs || thumbs.length === 0) return;
+
+  watchModalIndex = (watchModalIndex + delta + thumbs.length) % thumbs.length;
+  updateWatchModalContent();
+}
+
+function updateWatchModalContent() {
+  const thumbs = (currentFile && currentFile.thumbnails) ? currentFile.thumbnails : [];
+  if (!thumbs || thumbs.length === 0) return;
+
+  const url = thumbs[watchModalIndex];
+  const img = document.getElementById('watchModalImage');
+  const title = document.getElementById('watchModalTitle');
+  const counter = document.getElementById('watchModalCounter');
+  const downloadLink = document.getElementById('watchModalDownload');
+
+  if (img) img.src = url;
+  if (title) title.textContent = `${currentFile.custom_name || currentFile.filename} - Frame #${watchModalIndex + 1}`;
+  if (counter) counter.textContent = `Frame ${watchModalIndex + 1} of ${thumbs.length}`;
+  if (downloadLink) downloadLink.href = url;
+}
+
+/* ==========================================================================
    KEYBOARD SHORTCUTS & PLAYER CONTROLS
    ========================================================================== */
 
 function setupKeyboardShortcuts() {
   document.addEventListener('keydown', (e) => {
+    const watchModal = document.getElementById('watchModal');
+    const isModalOpen = watchModal && !watchModal.classList.contains('hidden');
+
+    if (isModalOpen) {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        navigateWatchModal(-1);
+        return;
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        navigateWatchModal(1);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeWatchModal();
+        return;
+      }
+    }
+
     const player = document.getElementById('mainVideoPlayer');
     if (!player || document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
       return;
