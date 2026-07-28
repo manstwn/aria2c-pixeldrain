@@ -174,25 +174,33 @@ async function fetchFiles() {
   }
 }
 
-let galleryCurrentPage = 1;
+let galleryCurrentPage = parseInt(sessionStorage.getItem('gallery_current_page') || '1', 10);
 let galleryPageSize = parseInt(localStorage.getItem('gallery_page_size') || '12', 10);
 let activeGalleryTagFilter = 'ALL';
+
+function saveGalleryViewState() {
+  sessionStorage.setItem('gallery_current_page', galleryCurrentPage);
+  sessionStorage.setItem('gallery_scroll_pos', window.scrollY || window.pageYOffset || 0);
+}
 
 function changeGalleryPageSize(val) {
   galleryPageSize = parseInt(val, 10) || 12;
   localStorage.setItem('gallery_page_size', galleryPageSize);
   galleryCurrentPage = 1;
+  sessionStorage.setItem('gallery_current_page', galleryCurrentPage);
   renderGalleryPage();
 }
 
 function changeGalleryTagFilter(val) {
   activeGalleryTagFilter = val;
   galleryCurrentPage = 1;
+  sessionStorage.setItem('gallery_current_page', galleryCurrentPage);
   renderGalleryPage();
 }
 
 function changeGalleryPage(delta) {
   galleryCurrentPage += delta;
+  sessionStorage.setItem('gallery_current_page', galleryCurrentPage);
   renderGalleryPage();
 }
 
@@ -447,14 +455,21 @@ function renderGalleryPage() {
           ` : ''}
 
           ${cat === 'video' ? `
-            <a href="/watch?id=${file.id}" class="btn-table-action primary" style="width: 100%; margin-top: 8px; text-decoration: none; text-align: center; font-weight: 700; background: linear-gradient(135deg, #007aff, #00c6ff); color: #fff; display: flex; align-items: center; justify-content: center; gap: 6px;" title="Watch Video">▶️ Play Video</a>
+            <a href="/watch?id=${file.id}" onclick="saveGalleryViewState()" class="btn-table-action primary" style="width: 100%; margin-top: 8px; text-decoration: none; text-align: center; font-weight: 700; background: linear-gradient(135deg, #007aff, #00c6ff); color: #fff; display: flex; align-items: center; justify-content: center; gap: 6px;" title="Watch Video">▶️ Play Video</a>
           ` : ''}
         </div>
       </div>
     `;
   }).join('');
 
-  // Do NOT preload all thumbnails upfront — load lazily on hover/modal open
+  // Restore saved scroll position if returning from watch view
+  const savedScroll = sessionStorage.getItem('gallery_scroll_pos');
+  if (savedScroll) {
+    sessionStorage.removeItem('gallery_scroll_pos');
+    setTimeout(() => {
+      window.scrollTo({ top: parseInt(savedScroll, 10), behavior: 'instant' });
+    }, 50);
+  }
 }
 
 // Automatic Smooth Frame Slideshow on Hover with Dual-Layer Fade Crossfade & Frame Dots

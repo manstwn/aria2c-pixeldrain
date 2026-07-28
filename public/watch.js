@@ -168,6 +168,8 @@ async function loadVideoDetails() {
       player.src = videoUrl;
     }
 
+    setupChunkBufferBar(player);
+
     player.onerror = () => {
       const err = player.error;
       console.error('[Video Player Error]', err);
@@ -274,6 +276,46 @@ function setupKeyboardShortcuts() {
         break;
     }
   });
+}
+
+function goBackToGallery() {
+  if (document.referrer && document.referrer.includes('/gallery')) {
+    window.history.back();
+  } else if (window.history.length > 1) {
+    window.history.back();
+  } else {
+    window.location.href = '/gallery';
+  }
+}
+
+function setupChunkBufferBar(playerElement) {
+  const container = document.getElementById('initialChunkBarContainer');
+  const progressBar = document.getElementById('initialChunkBarProgress');
+  if (!container || !progressBar || !playerElement) return;
+
+  container.classList.remove('hidden');
+  progressBar.style.width = '15%';
+
+  function updateBufferProgress() {
+    if (!playerElement.buffered || playerElement.buffered.length === 0) return;
+    const duration = playerElement.duration;
+    if (duration > 0) {
+      const bufferedEnd = playerElement.buffered.end(0);
+      const percent = Math.min(100, Math.max(15, Math.round((bufferedEnd / duration) * 100)));
+      progressBar.style.width = `${percent}%`;
+    }
+  }
+
+  function hideBufferBar() {
+    progressBar.style.width = '100%';
+    setTimeout(() => {
+      container.classList.add('hidden');
+    }, 400);
+  }
+
+  playerElement.addEventListener('progress', updateBufferProgress);
+  playerElement.addEventListener('canplay', hideBufferBar);
+  playerElement.addEventListener('playing', hideBufferBar);
 }
 
 async function touchCurrentVideo() {
