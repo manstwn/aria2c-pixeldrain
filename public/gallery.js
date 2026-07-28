@@ -316,7 +316,7 @@ function renderGalleryPage() {
   const startIndex = (galleryCurrentPage - 1) * galleryPageSize;
   const pageItems = filtered.slice(startIndex, startIndex + galleryPageSize);
 
-  // Update Pagination Controls UI
+  // Update Pagination Controls UI (Both Top & Bottom)
   const showingTextEl = document.getElementById('galleryShowingEntriesText');
   if (showingTextEl) {
     showingTextEl.textContent = totalItems === 0
@@ -324,14 +324,24 @@ function renderGalleryPage() {
       : `Showing ${startIndex + 1} to ${Math.min(startIndex + galleryPageSize, totalItems)} of ${totalItems} entries`;
   }
 
-  const pageInfoEl = document.getElementById('galleryPageInfo');
-  if (pageInfoEl) pageInfoEl.textContent = `Page ${galleryCurrentPage} of ${totalPages}`;
+  const pageInfoStr = `Page ${galleryCurrentPage} of ${totalPages}`;
+  const isFirstPage = galleryCurrentPage <= 1;
+  const isLastPage = galleryCurrentPage >= totalPages;
 
-  const btnPrev = document.getElementById('btnPrevGalleryPage');
-  if (btnPrev) btnPrev.disabled = galleryCurrentPage <= 1;
+  ['galleryPageInfo', 'galleryPageInfoTop'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = pageInfoStr;
+  });
 
-  const btnNext = document.getElementById('btnNextGalleryPage');
-  if (btnNext) btnNext.disabled = galleryCurrentPage >= totalPages;
+  ['btnPrevGalleryPage', 'btnPrevGalleryPageTop'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = isFirstPage;
+  });
+
+  ['btnNextGalleryPage', 'btnNextGalleryPageTop'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = isLastPage;
+  });
 
   if (pageItems.length === 0) {
     container.innerHTML = '';

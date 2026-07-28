@@ -107,7 +107,7 @@
 
       <!-- GALLERY HERO SECTION -->
       <section style="margin-bottom: 24px;">
-        <div class="flex-between" style="flex-wrap: wrap; gap: 16px;">
+        <div class="flex-between" style="flex-wrap: wrap; gap: 16px; align-items: center;">
           <div>
             <h2 style="font-size: 1.3rem; font-weight: 800; color: var(--text-primary); display: flex; align-items: center; gap: 10px;">
               <span class="material-symbols-outlined" style="color: var(--color-electric-blue); font-size: 28px;">movie_filter</span>
@@ -115,10 +115,16 @@
             </h2>
           </div>
 
-          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
             <div class="badge-pill">
               <span class="badge-label">Total Files</span>
               <span class="badge-val" id="statTotalMedia">0</span>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button class="btn-table-action" id="btnPrevGalleryPageTop" onclick="changeGalleryPage(-1)">❮ Prev</button>
+              <span id="galleryPageInfoTop" style="font-size: 0.85rem; color: var(--text-primary); font-weight: 600; font-family: var(--font-mono, monospace); white-space: nowrap;">Page 1 of 1</span>
+              <button class="btn-table-action" id="btnNextGalleryPageTop" onclick="changeGalleryPage(1)">Next ❯</button>
             </div>
           </div>
         </div>
@@ -187,10 +193,10 @@
         <!-- Gallery Bottom Pagination Bar -->
         <div class="pagination-bar-bottom flex-between" style="margin-top: 24px;">
           <span id="galleryShowingEntriesText" class="section-desc">Showing 0 to 0 of 0 entries</span>
-          <div class="page-nav-buttons">
-            <button class="btn-page-nav" id="btnPrevGalleryPage" onclick="changeGalleryPage(-1)">❮ Prev</button>
-            <span id="galleryPageInfo" class="page-info-text">Page 1 of 1</span>
-            <button class="btn-page-nav" id="btnNextGalleryPage" onclick="changeGalleryPage(1)">Next ❯</button>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="btn-table-action" id="btnPrevGalleryPage" onclick="changeGalleryPage(-1)">❮ Prev</button>
+            <span id="galleryPageInfo" style="font-size: 0.85rem; color: var(--text-primary); font-weight: 600; font-family: var(--font-mono, monospace); white-space: nowrap;">Page 1 of 1</span>
+            <button class="btn-table-action" id="btnNextGalleryPage" onclick="changeGalleryPage(1)">Next ❯</button>
           </div>
         </div>
       </section>
