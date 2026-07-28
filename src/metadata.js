@@ -353,74 +353,53 @@ function extractMetadata(filePath, sourceUrl = '') {
 
 /**
  * Detect and sanitize fake image headers (e.g. obfuscated HLS stream PNG headers)
- * and remux into a clean ISO MP4 video container.
+ * by stripping the 74-byte fake PNG header IN-PLACE (0 extra disk space used).
  */
 function sanitizeVideoFile(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return filePath;
 
+  let fd = null;
   try {
-    const fd = fs.openSync(filePath, 'r');
+    const stats = fs.statSync(filePath);
+    if (stats.size <= 74) return filePath;
+
+    fd = fs.openSync(filePath, 'r+');
     const buf = Buffer.alloc(16);
     fs.readSync(fd, buf, 0, 16, 0);
-    fs.closeSync(fd);
 
     // Check if video file starts with PNG magic bytes (89 50 4e 47 0d 0a 1a 0a)
     if (buf.toString('hex', 0, 8) === '89504e470d0a1a0a') {
-      console.log(`[Video Sanitizer] Fake PNG header detected in ${path.basename(filePath)}. Stripping header & remuxing with ffmpeg...`);
-      const sanitizedRawPath = `${filePath}.raw.ts`;
-      const sanitizedMp4Path = `${filePath}.sanit.mp4`;
+      console.log(`[Video Sanitizer] ⚡ Fake PNG header detected in ${path.basename(filePath)}. Stripping 74-byte header IN-PLACE (0 extra disk space used)...`);
 
-      // 1. Strip the fake 74-byte PNG header (0x4a bytes)
-      const inputFd = fs.openSync(filePath, 'r');
-      const outputFd = fs.openSync(sanitizedRawPath, 'w');
-      const stats = fs.statSync(filePath);
-
-      const chunkSize = 1024 * 1024;
+      const chunkSize = 2 * 1024 * 1024; // 2MB buffer for ultra-fast I/O
       const buffer = Buffer.alloc(chunkSize);
-      let position = 74; // Skip fake 74-byte PNG header
+      let readPos = 74;
+      let writePos = 0;
 
-      while (position < stats.size) {
-        const bytesRead = fs.readSync(inputFd, buffer, 0, Math.min(chunkSize, stats.size - position), position);
+      while (readPos < stats.size) {
+        const bytesToRead = Math.min(chunkSize, stats.size - readPos);
+        const bytesRead = fs.readSync(fd, buffer, 0, bytesToRead, readPos);
         if (bytesRead <= 0) break;
-        fs.writeSync(outputFd, buffer, 0, bytesRead);
-        position += bytesRead;
+        fs.writeSync(fd, buffer, 0, bytesRead, writePos);
+        readPos += bytesRead;
+        writePos += bytesRead;
       }
-      fs.closeSync(inputFd);
-      fs.closeSync(outputFd);
 
-      // 2. Remux raw MPEG-TS stream to standard MP4 container using ffmpeg
-      try {
-        const ffmpegCmd = `ffmpeg -y -analyzeduration 100M -probesize 100M -i "${sanitizedRawPath}" -c copy "${sanitizedMp4Path}"`;
-        execSync(ffmpegCmd, { timeout: 600000, stdio: 'ignore' });
+      // Truncate trailing 74 bytes directly in-place
+      const newSize = stats.size - 74;
+      fs.ftruncateSync(fd, newSize);
+      fs.closeSync(fd);
+      fd = null;
 
-        if (fs.existsSync(sanitizedMp4Path) && fs.statSync(sanitizedMp4Path).size > 1000) {
-          // Replace original file with clean remuxed MP4
-          fs.rmSync(filePath, { force: true });
-          fs.renameSync(sanitizedMp4Path, filePath);
-          console.log(`[Video Sanitizer] ✅ Successfully remuxed ${path.basename(filePath)} into clean ISO MP4 video!`);
-        } else {
-          // Fallback remux without -c copy if stream copy failed
-          const fallbackCmd = `ffmpeg -y -analyzeduration 100M -probesize 100M -i "${sanitizedRawPath}" -c:v libx264 -preset ultrafast -crf 23 -c:a aac "${sanitizedMp4Path}"`;
-          execSync(fallbackCmd, { timeout: 600000, stdio: 'ignore' });
-          if (fs.existsSync(sanitizedMp4Path) && fs.statSync(sanitizedMp4Path).size > 1000) {
-            fs.rmSync(filePath, { force: true });
-            fs.renameSync(sanitizedMp4Path, filePath);
-            console.log(`[Video Sanitizer] ✅ Successfully remuxed ${path.basename(filePath)} via fallback encoder into clean MP4 video!`);
-          }
-        }
-      } catch (remuxErr) {
-        console.warn(`[Video Sanitizer] ffmpeg remux warning: ${remuxErr.message}`);
-      } finally {
-        if (fs.existsSync(sanitizedRawPath)) {
-          try { fs.rmSync(sanitizedRawPath, { force: true }); } catch (e) {}
-        }
-        if (fs.existsSync(sanitizedMp4Path)) {
-          try { fs.rmSync(sanitizedMp4Path, { force: true }); } catch (e) {}
-        }
-      }
+      console.log(`[Video Sanitizer] ✅ In-place header sanitization complete! Adjusted file size: ${formatBytes(newSize)}.`);
+      return filePath;
     }
   } catch (err) {
-    console.warn(`[Video Sanitizer] Exception checking video file: ${err.message}`);
+    console.warn(`[Video Sanitizer Warning] In-place sanitization exception: ${err.message}`);
+  } finally {
+    if (fd !== null) {
+      try { fs.closeSync(fd); } catch (e) {}
+    }
   }
 
   return filePath;
