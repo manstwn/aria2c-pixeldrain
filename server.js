@@ -381,7 +381,7 @@ app.get('/watch', (req, res) => {
 });
 
 /**
- * Helper to stream video from Pixeldrain with redirect support and verbose logging
+ * Basic helper to proxy video stream directly from Pixeldrain
  */
 function streamVideoFromPixeldrain(targetUrl, headers, req, res, depth = 0) {
   if (depth > 5) {
@@ -401,21 +401,10 @@ function streamVideoFromPixeldrain(targetUrl, headers, req, res, depth = 0) {
     headers: headers
   };
 
-  logger.debug(`[Video Proxy Stream] Requesting (Depth ${depth}) -> ${targetUrl}`);
-
   const proxyReq = https.request(options, (proxyRes) => {
-    logger.debug(`[Video Proxy Response] Status: ${proxyRes.statusCode} | Headers:`, {
-      'content-type': proxyRes.headers['content-type'],
-      'content-length': proxyRes.headers['content-length'],
-      'content-range': proxyRes.headers['content-range'],
-      'accept-ranges': proxyRes.headers['accept-ranges'],
-      'location': proxyRes.headers['location'] || 'None'
-    });
-
-    // Handle 301/302/307/308 Redirects from Pixeldrain
+    // Handle 301/302/307/308 Redirects
     if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
       const redirectUrl = new URL(proxyRes.headers.location, targetUrl).toString();
-      logger.debug(`[Video Proxy Redirect] ${proxyRes.statusCode} redirect -> ${redirectUrl}`);
       return streamVideoFromPixeldrain(redirectUrl, headers, req, res, depth + 1);
     }
 
@@ -423,6 +412,8 @@ function streamVideoFromPixeldrain(targetUrl, headers, req, res, depth = 0) {
 
     const headersToForward = [
       'content-type',
+      'content-length',
+      'content-range',
       'accept-ranges',
       'last-modified',
       'cache-control',
@@ -435,94 +426,37 @@ function streamVideoFromPixeldrain(targetUrl, headers, req, res, depth = 0) {
       }
     });
 
-    if (!res.getHeader('Content-Type')) {
-      res.setHeader('Content-Type', 'video/mp4');
-    }
-
-    logger.debug(`[Video Proxy Piping] Streaming bytes to client response (Status ${proxyRes.statusCode})...`);
-
-    let checkedHeader = false;
-    const headerTransform = new (require('stream').Transform)({
-      transform(chunk, encoding, callback) {
-        if (!checkedHeader) {
-          checkedHeader = true;
-          const sampleLen = Math.min(16, chunk.length);
-          const hexHeader = chunk.toString('hex', 0, sampleLen);
-          const asciiHeader = chunk.toString('ascii', 0, sampleLen).replace(/[^\x20-\x7E]/g, '.');
-          logger.debug(`[Video Proxy Inspector] Byte 0 Chunk (${chunk.length} B) | Hex: ${hexHeader} | ASCII: ${asciiHeader}`);
-
-          if (chunk.length >= 8 && hexHeader.startsWith('89504e470d0a1a0a')) {
-            logger.debug('[Video Proxy Inspector] ⚡ FAKE PNG HEADER DETECTED! Stripping 74-byte header on-the-fly...');
-            const cleanChunk = chunk.slice(74);
-
-            if (proxyRes.headers['content-length']) {
-              const adjustedLen = Math.max(0, parseInt(proxyRes.headers['content-length'], 10) - 74);
-              res.setHeader('content-length', adjustedLen);
-            }
-            if (proxyRes.headers['content-range']) {
-              const crMatch = proxyRes.headers['content-range'].match(/bytes\s+(\d+)-(\d+)\/(\d+|\*)/);
-              if (crMatch) {
-                const s = Math.max(0, parseInt(crMatch[1], 10));
-                const e = Math.max(0, parseInt(crMatch[2], 10) - 74);
-                const t = crMatch[3] === '*' ? '*' : Math.max(0, parseInt(crMatch[3], 10) - 74);
-                res.setHeader('content-range', `bytes ${s}-${e}/${t}`);
-              }
-            }
-
-            callback(null, cleanChunk);
-            return;
-          } else {
-            logger.debug(`[Video Proxy Inspector] Stream Byte 0 is clean. Forwarding raw stream directly to player.`);
-            if (proxyRes.headers['content-length']) res.setHeader('content-length', proxyRes.headers['content-length']);
-            if (proxyRes.headers['content-range']) res.setHeader('content-range', proxyRes.headers['content-range']);
-          }
-        }
-        callback(null, chunk);
-      }
-    });
-
-    proxyRes.pipe(headerTransform).pipe(res);
+    proxyRes.pipe(res);
   });
 
   proxyReq.on('error', (err) => {
-    logger.error(`[Video Proxy Request Error] ${err.message}`);
+    logger.error(`[Video Proxy Error] ${err.message}`);
     if (!res.headersSent) {
       res.status(500).json({ error: 'Video streaming failed: ' + err.message });
     }
   });
 
   req.on('close', () => {
-    logger.debug('[Video Proxy Stream] Client closed connection / stopped playback.');
     try { proxyReq.destroy(); } catch (e) {}
   });
 
-  // End request stream to send HTTP GET to Pixeldrain!
   proxyReq.end();
 }
 
 app.get('/api/video/:id', (req, res) => {
   const { id } = req.params;
-  const rangeHeader = req.headers.range || 'None';
-
-  logger.debug(`[Video Proxy API] Incoming GET /api/video/${id} | Range: ${rangeHeader}`);
 
   const token = req.cookies?.gotouch_token || req.query.token || (req.headers.authorization && req.headers.authorization.split(' ')[1]);
   const decoded = auth.verifyToken(token);
 
   if (!decoded) {
-    logger.warn(`[Video Proxy Auth Failed] Unauthorized request for video ID ${id}. Invalid/missing token.`);
     return res.status(401).json({ error: 'Unauthorized', message: 'PIN authentication required.' });
   }
 
-  logger.debug(`[Video Proxy Auth Success] Authenticated session for video ID ${id}`);
-
   const file = db.getFileById(id);
   if (!file || !file.pixeldrain_id) {
-    logger.warn(`[Video Proxy Not Found] Record ID ${id} not found or missing pixeldrain_id in database.`);
     return res.status(404).json({ error: 'Video file record not found or missing Pixeldrain ID.' });
   }
-
-  logger.debug(`[Video Proxy File Record] File: "${file.filename}" | Pixeldrain ID: ${file.pixeldrain_id} | Status: ${file.status}`);
 
   const targetUrl = `https://pixeldrain.com/api/file/${file.pixeldrain_id}`;
   const reqHeaders = {
@@ -530,14 +464,14 @@ app.get('/api/video/:id', (req, res) => {
     'Accept': '*/*'
   };
 
+  if (req.headers.range) {
+    reqHeaders['Range'] = req.headers.range;
+  }
+
   const pixeldrainToken = (process.env.PIXELDRAIN_API_TOKEN || '').trim();
   if (pixeldrainToken) {
     reqHeaders['Authorization'] = `Basic ${Buffer.from(`:${pixeldrainToken}`).toString('base64')}`;
-    logger.debug('[Video Proxy Auth] Attached Pixeldrain API basic authorization header');
   }
-
-  // Force Range header to guarantee HTTP 206 Partial Content chunked response from Pixeldrain
-  reqHeaders['Range'] = req.headers.range || 'bytes=0-';
 
   streamVideoFromPixeldrain(targetUrl, reqHeaders, req, res);
 });
