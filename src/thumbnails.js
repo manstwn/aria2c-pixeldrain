@@ -56,27 +56,74 @@ function getVideoDuration(filePath, meta = {}) {
 }
 
 /**
- * Helper to run ffmpeg seeking frame extraction asynchronously
+ * Fast video frame extraction using FFmpeg keyframe seeking and 640px thumbnail downscaling
  */
 function extractVideoFrame(filePath, timestampSeconds, outputPath) {
   return new Promise((resolve) => {
-    // ffmpeg -ss <timestamp> -i <filePath> -vframes 1 -q:v 2 -y <outputPath>
     const args = [
       '-ss', timestampSeconds.toString(),
+      '-noaccurate_seek',
       '-i', filePath,
+      '-vf', 'scale=640:-1',
       '-vframes', '1',
       '-threads', '2',
-      '-q:v', '2',
+      '-q:v', '4',
       '-y',
       outputPath
     ];
 
-    execFile('ffmpeg', args, { timeout: 10000 }, (error) => {
+    execFile('ffmpeg', args, { timeout: 6000 }, (error) => {
       if (!error && fs.existsSync(outputPath)) {
         resolve(true);
       } else {
-        resolve(false);
+        // Fallback seek
+        const fallbackArgs = [
+          '-ss', timestampSeconds.toString(),
+          '-i', filePath,
+          '-vf', 'scale=640:-1',
+          '-vframes', '1',
+          '-q:v', '4',
+          '-y',
+          outputPath
+        ];
+        execFile('ffmpeg', fallbackArgs, { timeout: 6000 }, (err2) => {
+          resolve(!err2 && fs.existsSync(outputPath));
+        });
       }
+    });
+  });
+}
+
+/**
+ * Ultra-Fast Single-Pass FFmpeg 15-frame video extraction (1 single process pass)
+ */
+function extractVideoFramesSinglePass(filePath, durationSeconds, fileId) {
+  return new Promise((resolve) => {
+    const count = 15;
+    const safeDuration = Math.max(1, durationSeconds || 300);
+    const fpsRate = (count / safeDuration).toFixed(5);
+    const outPattern = path.join(IMAGES_DIR, `${fileId}-image-%d.jpg`);
+
+    const args = [
+      '-i', filePath,
+      '-vf', `fps=${fpsRate},scale=640:-1`,
+      '-vframes', count.toString(),
+      '-threads', '2',
+      '-q:v', '4',
+      '-y',
+      outPattern
+    ];
+
+    execFile('ffmpeg', args, { timeout: 15000 }, () => {
+      const generated = [];
+      for (let i = 1; i <= count; i++) {
+        const fn = `${fileId}-image-${i}.jpg`;
+        const p = path.join(IMAGES_DIR, fn);
+        if (fs.existsSync(p)) {
+          generated.push(`/data/image/${fn}`);
+        }
+      }
+      resolve(generated);
     });
   });
 }
@@ -122,7 +169,7 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
   }
 
   // =========================================================================
-  // VIDEO 15-FRAME SCREENSHOT GENERATION ACROSS REAL DURATION
+  // VIDEO 15-FRAME SCREENSHOT GENERATION (SINGLE-PASS ULTRA FAST)
   // =========================================================================
   if (category === 'video' || treatAsVideo) {
     if (!isFFmpegAvailable()) {
@@ -132,23 +179,45 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
 
     const duration = getVideoDuration(filePath, meta);
     const count = 15;
-    const interval = duration / (count + 1);
-
     const formattedMins = (duration / 60).toFixed(1);
-    console.log(`[Thumbnails] Generating ${count} video frame screenshots for ${path.basename(filePath)} (Total Duration: ${duration}s / ${formattedMins} mins, Interval: Every ${interval.toFixed(1)}s)...`);
+    console.log(`[Thumbnails] ⚡ Single-Pass extracting ${count} frame screenshots for ${path.basename(filePath)} (${duration}s / ${formattedMins}m)...`);
 
+    // 1. Primary: Try single-pass extraction (1 single FFmpeg process)
+    const singlePassFrames = await extractVideoFramesSinglePass(filePath, duration, fileId);
+    if (singlePassFrames.length > 0) {
+      console.log(`[Thumbnails] 🚀 Generated ${singlePassFrames.length}/${count} video frame screenshots for ${fileId} in 1-pass lightning mode!`);
+      return singlePassFrames;
+    }
+
+    // 2. Secondary Fallback: Seek-based batching if single-pass produced 0 frames
+    console.warn(`[Thumbnails Fallback] Single-pass extraction yielded 0 frames, running fallback seek batching...`);
+    const interval = duration / (count + 1);
+    const tasks = [];
     for (let i = 1; i <= count; i++) {
       const targetTime = parseFloat((interval * i).toFixed(1));
       const outFilename = `${fileId}-image-${i}.jpg`;
       const outPath = path.join(IMAGES_DIR, outFilename);
-
-      const success = await extractVideoFrame(filePath, targetTime, outPath);
-      if (success) {
-        thumbnails.push(`/data/image/${outFilename}`);
-      }
+      tasks.push({ i, targetTime, outFilename, outPath });
     }
 
-    console.log(`[Thumbnails] ✅ Generated ${thumbnails.length}/${count} video frame screenshots for ${fileId}!`);
+    const batchSize = 5;
+    for (let b = 0; b < tasks.length; b += batchSize) {
+      const batch = tasks.slice(b, b + batchSize);
+      await Promise.all(batch.map(async (task) => {
+        const success = await extractVideoFrame(filePath, task.targetTime, task.outPath);
+        if (success) {
+          thumbnails.push(`/data/image/${task.outFilename}`);
+        }
+      }));
+    }
+
+    thumbnails.sort((a, b) => {
+      const numA = parseInt((a.match(/-image-(\d+)\.jpg$/) || [])[1] || '0', 10);
+      const numB = parseInt((b.match(/-image-(\d+)\.jpg$/) || [])[1] || '0', 10);
+      return numA - numB;
+    });
+
+    console.log(`[Thumbnails] Generated ${thumbnails.length}/${count} video frame screenshots for ${fileId} via fallback mode.`);
     return thumbnails;
   }
 
