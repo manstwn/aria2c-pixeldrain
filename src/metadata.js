@@ -352,6 +352,35 @@ function extractMetadata(filePath, sourceUrl = '') {
 }
 
 /**
+ * Check available free disk space in bytes for a given directory path
+ */
+function getFreeDiskSpace(targetPath) {
+  try {
+    if (process.platform === 'win32') {
+      const output = execSync(`wmic logicaldisk get freespace,caption`, { timeout: 3000 }).toString();
+      const lines = output.split('\n');
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 2 && !isNaN(parts[1])) {
+          return parseInt(parts[1], 10);
+        }
+      }
+    } else {
+      const output = execSync(`df -k "${targetPath}"`, { timeout: 3000 }).toString();
+      const lines = output.trim().split('\n');
+      if (lines.length >= 2) {
+        const parts = lines[1].trim().split(/\s+/);
+        // df -k 4th column (Avail) is available 1K-blocks
+        if (parts.length >= 4 && !isNaN(parts[3])) {
+          return parseInt(parts[3], 10) * 1024;
+        }
+      }
+    }
+  } catch (e) {}
+  return 10 * 1024 * 1024 * 1024; // Default fallback to 10GB if check fails
+}
+
+/**
  * Detect and sanitize fake image headers (e.g. obfuscated HLS stream PNG headers)
  * by stripping the 74-byte fake PNG header IN-PLACE (0 extra disk space used).
  */
@@ -391,7 +420,18 @@ function sanitizeVideoFile(filePath) {
       fs.closeSync(fd);
       fd = null;
 
-      console.log(`[Video Sanitizer] ✅ In-place header sanitization complete! Remuxing to Pure Native ISO MP4 (-c copy -movflags +faststart)...`);
+      console.log(`[Video Sanitizer] ✅ In-place header sanitization complete! Adjusted size: ${formatBytes(newSize)}.`);
+
+      // Check available free disk space before running ffmpeg -c copy
+      const freeSpaceBytes = getFreeDiskSpace(path.dirname(filePath));
+      const requiredSpaceBytes = newSize * 1.1; // Require 110% of file size
+
+      if (freeSpaceBytes < requiredSpaceBytes) {
+        console.log(`[Video Sanitizer Guard] 🛡️ Free disk space (${formatBytes(freeSpaceBytes)}) < required space (${formatBytes(requiredSpaceBytes)}). Skipping 2nd file copy to prevent 100% disk full!`);
+        return filePath;
+      }
+
+      console.log(`[Video Sanitizer] Remuxing to Pure Native ISO MP4 (-c copy -movflags +faststart)...`);
 
       // Remux raw stream into Pure Native ISO MP4 container for instant HTML5 playback
       const pureMp4Path = `${filePath}.pure.mp4`;
@@ -403,18 +443,9 @@ function sanitizeVideoFile(filePath) {
           fs.rmSync(filePath, { force: true });
           fs.renameSync(pureMp4Path, filePath);
           console.log(`[Video Sanitizer] 🎬 Successfully created Pure Native ISO MP4 video for ${path.basename(filePath)}!`);
-        } else {
-          // Fallback encoder if stream copy is incompatible
-          const fallbackCmd = `ffmpeg -y -analyzeduration 100M -probesize 100M -i "${filePath}" -c:v libx264 -preset ultrafast -crf 23 -c:a aac -movflags +faststart "${pureMp4Path}"`;
-          execSync(fallbackCmd, { timeout: 600000, stdio: 'ignore' });
-          if (fs.existsSync(pureMp4Path) && fs.statSync(pureMp4Path).size > 1000) {
-            fs.rmSync(filePath, { force: true });
-            fs.renameSync(pureMp4Path, filePath);
-            console.log(`[Video Sanitizer] 🎬 Successfully created Pure Native MP4 via fallback encoder!`);
-          }
         }
       } catch (remuxErr) {
-        console.warn(`[Video Sanitizer] Remux warning: ${remuxErr.message}`);
+        console.warn(`[Video Sanitizer Warning] Remux exception: ${remuxErr.message}`);
       } finally {
         if (fs.existsSync(pureMp4Path)) {
           try { fs.rmSync(pureMp4Path, { force: true }); } catch (e) {}
