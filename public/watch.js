@@ -150,7 +150,11 @@ async function loadVideoDetails() {
     if (isM3u8 && window.Hls && Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: true
+        lowLatencyMode: true,
+        maxBufferLength: 3,             // Buffer only 3 seconds ahead for instant start
+        maxMaxBufferLength: 6,
+        maxBufferSize: 2 * 1024 * 1024, // 2 MB max buffer size (starts on Chunk 1)
+        maxBufferHole: 0.5
       });
       hls.loadSource(videoUrl);
       hls.attachMedia(player);
