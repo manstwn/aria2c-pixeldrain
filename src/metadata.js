@@ -390,8 +390,7 @@ function sanitizeVideoFile(filePath) {
 
       // 2. Remux raw MPEG-TS stream to standard MP4 container using ffmpeg
       try {
-        const ffmpegCmd = `ffmpeg -y -i "${sanitizedRawPath}" -c copy "${sanitizedMp4Path}"`;
-        // Increase timeout to 10 minutes (600000ms) to ensure huge video streams can be safely remuxed
+        const ffmpegCmd = `ffmpeg -y -analyzeduration 100M -probesize 100M -i "${sanitizedRawPath}" -c copy "${sanitizedMp4Path}"`;
         execSync(ffmpegCmd, { timeout: 600000, stdio: 'ignore' });
 
         if (fs.existsSync(sanitizedMp4Path) && fs.statSync(sanitizedMp4Path).size > 1000) {
@@ -399,6 +398,15 @@ function sanitizeVideoFile(filePath) {
           fs.rmSync(filePath, { force: true });
           fs.renameSync(sanitizedMp4Path, filePath);
           console.log(`[Video Sanitizer] ✅ Successfully remuxed ${path.basename(filePath)} into clean ISO MP4 video!`);
+        } else {
+          // Fallback remux without -c copy if stream copy failed
+          const fallbackCmd = `ffmpeg -y -analyzeduration 100M -probesize 100M -i "${sanitizedRawPath}" -c:v libx264 -preset ultrafast -crf 23 -c:a aac "${sanitizedMp4Path}"`;
+          execSync(fallbackCmd, { timeout: 600000, stdio: 'ignore' });
+          if (fs.existsSync(sanitizedMp4Path) && fs.statSync(sanitizedMp4Path).size > 1000) {
+            fs.rmSync(filePath, { force: true });
+            fs.renameSync(sanitizedMp4Path, filePath);
+            console.log(`[Video Sanitizer] ✅ Successfully remuxed ${path.basename(filePath)} via fallback encoder into clean MP4 video!`);
+          }
         }
       } catch (remuxErr) {
         console.warn(`[Video Sanitizer] ffmpeg remux warning: ${remuxErr.message}`);

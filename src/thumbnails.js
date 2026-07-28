@@ -152,7 +152,7 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
   if (category === 'image') {
     try {
       const stats = fs.statSync(filePath);
-      if (stats.size > 20 * 1024 * 1024) {
+      if (stats.size > 10 * 1024 * 1024) {
         console.log(`[Thumbnails] "${path.basename(filePath)}" classified as image but is ${(stats.size / 1024 / 1024).toFixed(1)}MB — assuming misclassified video, trying frame extraction.`);
         treatAsVideo = true;
       } else {
