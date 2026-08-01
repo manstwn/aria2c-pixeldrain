@@ -5,7 +5,6 @@
 let currentPin = '';
 let currentFile = null;
 let currentFileId = null;
-let plyrPlayer = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -141,30 +140,10 @@ async function loadVideoDetails() {
     document.title = `${displayName} | PixelTouch Cinema`;
     document.getElementById('videoTitle').textContent = displayName;
 
-    // Set up Video Source directly via Proxy Endpoint using Plyr player engine
+    // Set up Video Source directly via Proxy Endpoint
     const videoUrl = `/api/video/${currentFile.id}`;
     const player = document.getElementById('mainVideoPlayer');
-
-    if (window.Plyr) {
-      if (!plyrPlayer) {
-        player.src = videoUrl;
-        plyrPlayer = new Plyr(player, {
-          controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings', 'pip', 'fullscreen'],
-          seekTime: 5,
-          keyboard: { focused: true, global: true }
-        });
-      } else {
-        plyrPlayer.source = {
-          type: 'video',
-          sources: [
-            {
-              src: videoUrl,
-              type: 'video/mp4'
-            }
-          ]
-        };
-      }
-    } else {
+    if (player) {
       player.src = videoUrl;
     }
 

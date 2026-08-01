@@ -9,20 +9,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-  <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
   <style>
-    :root {
-      --plyr-color-main: #007aff;
-      --plyr-video-background: #000000;
-      --plyr-control-radius: 6px;
-    }
-    .plyr {
-      border-radius: var(--radius-lg, 12px);
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-      max-height: 72vh;
-    }
     /* Small Initial Chunk Buffer Bar */
     .chunk-buffer-bar-container {
       width: 100%;
@@ -103,9 +91,8 @@
       border-radius: 4px;
       backdrop-filter: blur(4px);
     }
-    /* Hide volume control and grid selector on mobile phone screens (<768px) */
+    /* Hide grid selector on mobile phone screens (<768px) */
     @media (max-width: 768px) {
-      .plyr__volume,
       .grid-selector-mobile-hide {
         display: none !important;
       }
