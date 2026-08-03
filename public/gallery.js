@@ -288,6 +288,14 @@ function changeGridColumns(cols) {
 
 let activeHoverFileId = null;
 
+// Debounced search handler — avoids rebuilding the entire grid on every keystroke.
+let _gallerySearchDebounce = null;
+function handleGallerySearchInput() {
+  galleryCurrentPage = 1;
+  clearTimeout(_gallerySearchDebounce);
+  _gallerySearchDebounce = setTimeout(renderGalleryPage, 200);
+}
+
 function renderGalleryPage() {
   const container = document.getElementById('galleryGridContainer');
   const emptyState = document.getElementById('galleryEmptyState');
@@ -299,11 +307,8 @@ function renderGalleryPage() {
   // Prevent SSE refresh from wiping out active hover slideshow card
   if (activeHoverFileId) return;
 
-  // Restore or set grid columns selection
-  const gridSelect = document.getElementById('galleryGridColsSelect');
-  if (gridSelect && gridSelect.value) {
-    changeGridColumns(gridSelect.value);
-  }
+  // Grid columns are applied only when the selector changes (changeGridColumns),
+  // not on every render — writing gridTemplateColumns each render caused layout thrash.
 
   // Update Summary Counters
   const totalMediaEl = document.getElementById('statTotalMedia');
@@ -419,15 +424,16 @@ function renderGalleryPage() {
          </div>`
       : '';
 
-    // Cover HTML with dual-layer crossfade for cinematic smooth frame transitions
+    // Cover HTML with dual-layer crossfade for cinematic smooth frame transitions.
+    // Real <img> tags with lazy loading so only near-viewport covers decode on page load.
     let coverHTML = '';
     if (thumbUrl) {
       coverHTML = `
         <div class="gallery-card-cover"
              id="coverDiv_${file.id}"
              onclick="openGalleryModal('${file.id}')">
-          <div class="cover-layer layer-bg" id="layerBg_${file.id}" style="background-image: url('${escapeHtml(thumbUrl)}');"></div>
-          <div class="cover-layer layer-fg" id="layerFg_${file.id}" style="background-image: url('${escapeHtml(thumbUrl)}'); opacity: 0;"></div>
+          <img class="cover-layer layer-bg" id="layerBg_${file.id}" src="${escapeHtml(thumbUrl)}" alt="" loading="lazy" decoding="async" draggable="false">
+          <img class="cover-layer layer-fg" id="layerFg_${file.id}" alt="" decoding="async" draggable="false" style="opacity: 0;">
           <span class="cover-small-dot"></span>
           ${topBadgeHTML}
           ${frameDotsHTML}
@@ -463,7 +469,8 @@ function renderGalleryPage() {
       <div class="gallery-item-card"
            id="card_${file.id}"
            onmouseenter="startHoverSlideshow(event, '${file.id}')"
-           onmouseleave="stopHoverSlideshow(event, '${file.id}')">
+           onmouseleave="stopHoverSlideshow(event, '${file.id}')"
+           ontouchstart="handleCardTouch(event, '${file.id}')">
         ${coverHTML}
         <div class="gallery-card-body">
           <div class="gallery-card-title">
@@ -481,7 +488,7 @@ function renderGalleryPage() {
           ` : ''}
 
           ${cat === 'video' ? `
-            <a href="/watch?id=${file.id}" onclick="saveGalleryViewState()" class="btn-table-action primary" style="width: 100%; margin-top: 8px; text-decoration: none; text-align: center; font-weight: 700; background: linear-gradient(135deg, #007aff, #00c6ff); color: #fff; display: flex; align-items: center; justify-content: center; gap: 6px;" title="Watch Video">▶️ Play Video</a>
+            <a href="/watch?id=${file.id}" onclick="saveGalleryViewState()" class="btn-table-action primary btn-play-video" title="Watch Video">▶️ Play Video</a>
           ` : ''}
         </div>
       </div>
@@ -535,11 +542,11 @@ function startHoverSlideshow(evt, fileId) {
 
     if (layerBg && layerFg && nextUrl) {
       if (activeLayer === 'bg') {
-        layerFg.style.backgroundImage = `url("${nextUrl}")`;
+        layerFg.src = nextUrl;
         layerFg.style.opacity = '1';
         activeLayer = 'fg';
       } else {
-        layerBg.style.backgroundImage = `url("${nextUrl}")`;
+        layerBg.src = nextUrl;
         layerFg.style.opacity = '0';
         activeLayer = 'bg';
       }
@@ -580,7 +587,7 @@ function stopHoverSlideshow(evt, fileId) {
 
   if (file && file.thumbnails && file.thumbnails.length > 0) {
     const defaultThumb = file.selected_thumbnail || file.thumbnails[0];
-    if (layerBg) layerBg.style.backgroundImage = `url("${defaultThumb}")`;
+    if (layerBg) layerBg.src = defaultThumb;
     if (layerFg) layerFg.style.opacity = '0';
   }
 
@@ -596,6 +603,27 @@ function stopHoverSlideshow(evt, fileId) {
     });
   }
 }
+
+// Mobile: a touch/drag landing on a card starts its frame cycling (and lazy-loads
+// that card's frames only now). Any previously active card is stopped first so
+// at most one slideshow timer runs at a time. Frames are never loaded on page open.
+function handleCardTouch(evt, fileId) {
+  if (activeHoverFileId && activeHoverFileId !== fileId) {
+    stopHoverSlideshow(null, activeHoverFileId);
+  }
+  if (activeHoverFileId === fileId) return; // already cycling this card
+  startHoverSlideshow(null, fileId);
+}
+
+// Tapping outside any card stops the active mobile slideshow.
+document.addEventListener('touchstart', (e) => {
+  if (!activeHoverFileId) return;
+  const card = e.target.closest && e.target.closest('.gallery-item-card');
+  const activeCard = document.getElementById(`card_${activeHoverFileId}`);
+  if (!card || card !== activeCard) {
+    stopHoverSlideshow(null, activeHoverFileId);
+  }
+}, { passive: true });
 
 /* ==========================================================================
    METADATA & LIGHTBOX MODAL HANDLERS

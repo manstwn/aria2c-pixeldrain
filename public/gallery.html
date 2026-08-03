@@ -121,7 +121,7 @@
               <span class="badge-val" id="statTotalMedia">0</span>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 8px;">
+            <div class="gallery-page-nav" style="display: flex; align-items: center; gap: 8px;">
               <button class="btn-table-action" id="btnPrevGalleryPageTop" onclick="changeGalleryPage(-1)">❮ Prev</button>
               <span id="galleryPageInfoTop" style="font-size: 0.85rem; color: var(--text-primary); font-weight: 600; font-family: var(--font-mono, monospace); white-space: nowrap;">Page 1 of 1</span>
               <button class="btn-table-action" id="btnNextGalleryPageTop" onclick="changeGalleryPage(1)">Next ❯</button>
@@ -130,13 +130,13 @@
         </div>
 
         <!-- Gallery Toolbar -->
-        <div class="filter-bar" style="margin-top: 20px;">
+        <div class="filter-bar gallery-toolbar" style="margin-top: 20px;">
           <div class="search-box" style="max-width: 380px;">
             <span class="material-symbols-outlined" style="font-size: 18px;">search</span>
-            <input type="text" id="gallerySearchInput" oninput="renderGalleryPage()" placeholder="Search media by title or ID..." class="glow-input">
+            <input type="text" id="gallerySearchInput" oninput="handleGallerySearchInput()" placeholder="Search media by title or ID..." class="glow-input">
           </div>
 
-          <div style="display: flex; gap: 12px; margin-left: auto; flex-wrap: wrap; align-items: center;">
+          <div class="gallery-toolbar-controls" style="display: flex; gap: 12px; margin-left: auto; flex-wrap: wrap; align-items: center;">
             <div class="page-size-selector grid-selector-mobile-hide">
               <label for="galleryGridColsSelect">Grid:</label>
               <select id="galleryGridColsSelect" onchange="changeGridColumns(this.value)" class="glow-input">
@@ -148,7 +148,7 @@
               </select>
             </div>
 
-            <div class="page-size-selector">
+            <div class="page-size-selector gallery-tag-select">
               <label for="galleryTagFilterSelect">Tag:</label>
               <select id="galleryTagFilterSelect" onchange="changeGalleryTagFilter(this.value)" class="glow-input">
                 <option value="ALL">All Tags</option>

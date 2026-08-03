@@ -797,8 +797,8 @@ function renderLedger() {
       const thumbUrl = file.selected_thumbnail || ((file.thumbnails && file.thumbnails.length > 0) ? file.thumbnails[0] : null);
       const previewCellHTML = thumbUrl
         ? `<div class="table-thumb-box" id="tableCover_${file.id}" onclick="openGalleryModal('${file.id}')" title="Click to view screenshot gallery">
-             <div class="cover-layer layer-bg" id="tableLayerBg_${file.id}" style="background-image: url('${escapeHtml(thumbUrl)}');"></div>
-             <div class="cover-layer layer-fg" id="tableLayerFg_${file.id}" style="background-image: url('${escapeHtml(thumbUrl)}'); opacity: 0;"></div>
+             <img class="cover-layer layer-bg" id="tableLayerBg_${file.id}" src="${escapeHtml(thumbUrl)}" alt="" loading="lazy" decoding="async" draggable="false">
+             <img class="cover-layer layer-fg" id="tableLayerFg_${file.id}" alt="" decoding="async" draggable="false" style="opacity: 0;">
              <span class="cover-small-dot"></span>
            </div>`
         : `<div class="table-thumb-box fallback" title="No thumbnail available">
@@ -1691,11 +1691,11 @@ function startTableHoverSlideshow(evt, fileId) {
 
     if (layerBg && layerFg && nextUrl) {
       if (activeLayer === 'bg') {
-        layerFg.style.backgroundImage = `url("${nextUrl}")`;
+        layerFg.src = nextUrl;
         layerFg.style.opacity = '1';
         activeLayer = 'fg';
       } else {
-        layerBg.style.backgroundImage = `url("${nextUrl}")`;
+        layerBg.src = nextUrl;
         layerFg.style.opacity = '0';
         activeLayer = 'bg';
       }
@@ -1720,7 +1720,7 @@ function stopTableHoverSlideshow(evt, fileId) {
   const layerFg = document.getElementById(`tableLayerFg_${fileId}`);
 
   if (layerBg && layerFg && defaultThumb) {
-    layerBg.style.backgroundImage = `url("${defaultThumb}")`;
+    layerBg.src = defaultThumb;
     layerFg.style.opacity = '0';
   }
 }
