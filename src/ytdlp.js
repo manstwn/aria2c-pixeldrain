@@ -219,7 +219,7 @@ function startDownload(qItem, onComplete, onError) {
   ];
 
   if (isHlsPlaylist) {
-    args.push('-N', '4', '--concurrent-fragments', '4');
+    args.push('-N', '8', '--concurrent-fragments', '8');
   } else {
     args.push('--downloader', 'aria2c', '--downloader-args', 'aria2c:-j8 -s8 -x8');
   }
