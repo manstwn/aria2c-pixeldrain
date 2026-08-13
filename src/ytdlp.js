@@ -104,11 +104,11 @@ function startDownload(qItem, onComplete, onError) {
   const outPattern = outFilename ? path.join(downloadsDir, outFilename) : path.join(downloadsDir, '%(title)s [%(id)s].%(ext)s');
 
   const args = [
-    '-N', '16',
+    '-N', '4',
     '--no-playlist',
     '--no-mtime',
     '--newline',
-    '--concurrent-fragments', '16',
+    '--concurrent-fragments', '8',
     '--remux-video', 'mp4',
     '--merge-output-format', 'mp4',
     '-o', outPattern,

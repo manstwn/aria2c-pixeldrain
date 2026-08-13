@@ -436,7 +436,7 @@ function sanitizeVideoFile(filePath) {
       // Remux raw stream into Pure Native ISO MP4 container for instant HTML5 playback
       const pureMp4Path = `${filePath}.pure.mp4`;
       try {
-        const ffmpegCmd = `ffmpeg -y -analyzeduration 100M -probesize 100M -i "${filePath}" -c copy -movflags +faststart "${pureMp4Path}"`;
+        const ffmpegCmd = `ffmpeg -y -threads 1 -analyzeduration 100M -probesize 100M -i "${filePath}" -c copy -movflags +faststart "${pureMp4Path}"`;
         execSync(ffmpegCmd, { timeout: 600000, stdio: 'ignore' });
 
         if (fs.existsSync(pureMp4Path) && fs.statSync(pureMp4Path).size > 1000) {
