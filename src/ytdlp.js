@@ -252,7 +252,10 @@ function startDownload(qItem, onComplete, onError) {
   activeTasks.set(gid, taskState);
 
   try {
-    const child = spawn(executable, args, { windowsHide: true });
+    const child = spawn(executable, args, {
+      windowsHide: true,
+      detached: process.platform !== 'win32'
+    });
     taskState.process = child;
 
     child.stdout.on('data', (buffer) => {
@@ -274,6 +277,7 @@ function startDownload(qItem, onComplete, onError) {
     });
 
     child.on('error', (err) => {
+      if (taskState.isCancelled) return;
       console.error(`[yt-dlp] Failed to start process:`, err.message);
       taskState.status = 'ERROR';
       taskState.errorMessage = err.message;
@@ -282,6 +286,10 @@ function startDownload(qItem, onComplete, onError) {
     });
 
     child.on('exit', async (code) => {
+      if (taskState.isCancelled) {
+        console.log(`[yt-dlp] Task ${gid} exit signal ignored (cancelled by user).`);
+        return;
+      }
       console.log(`[yt-dlp] Process exited with code ${code}`);
       if (code === 0) {
         taskState.progress = 100;
@@ -378,8 +386,24 @@ function startDownload(qItem, onComplete, onError) {
 function removeDownload(gid) {
   const task = activeTasks.get(gid);
   if (task) {
+    task.isCancelled = true;
+    task.status = 'CANCELLED';
+
     if (task.process) {
-      try { task.process.kill('SIGKILL'); } catch (e) {}
+      try {
+        if (task.process.pid) {
+          if (process.platform === 'win32') {
+            const { execSync } = require('child_process');
+            execSync(`taskkill /F /T /PID ${task.process.pid}`, { stdio: 'ignore' });
+          } else {
+            try {
+              process.kill(-task.process.pid, 'SIGKILL');
+            } catch (e) {
+              try { task.process.kill('SIGKILL'); } catch (e2) {}
+            }
+          }
+        }
+      } catch (e) {}
     }
     if (task.uploadTaskPromise && task.uploadTaskPromise.abort) {
       try { task.uploadTaskPromise.abort(); } catch (e) {}
