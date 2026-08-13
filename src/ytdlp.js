@@ -116,6 +116,12 @@ function startDownload(qItem, onComplete, onError) {
 
   const outPattern = outFilename ? path.join(downloadsDir, outFilename) : path.join(downloadsDir, '%(title)s [%(id)s].%(ext)s');
 
+  let refererUrl = '';
+  try {
+    const parsed = new URL(targetUrl);
+    refererUrl = `${parsed.protocol}//${parsed.hostname}/`;
+  } catch (e) {}
+
   const args = [
     '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     '--no-check-certificates',
@@ -127,6 +133,10 @@ function startDownload(qItem, onComplete, onError) {
     '--remux-video', 'mp4',
     '--merge-output-format', 'mp4'
   ];
+
+  if (refererUrl) {
+    args.push('--referer', refererUrl);
+  }
 
   if (isHlsPlaylist) {
     args.push('--downloader', 'ffmpeg');
