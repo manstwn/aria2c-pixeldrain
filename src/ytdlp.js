@@ -101,18 +101,17 @@ function startDownload(qItem, onComplete, onError) {
     outFilename += '.mp4';
   }
 
-  let targetUrl = qItem.url ? qItem.url.trim() : '';
-
-  // Auto-detect HLS playlist URLs ending in .txt, .m3u8, or containing .urlset / index- / master.
-  if (targetUrl && !targetUrl.startsWith('hls+') && (
+  let targetUrl = qItem.url ? qItem.url.trim().replace(/^hls\+/, '') : '';
+  const isHlsPlaylist = targetUrl && (
     targetUrl.endsWith('.txt') ||
     targetUrl.endsWith('.m3u8') ||
     targetUrl.includes('.urlset/') ||
     targetUrl.includes('index-') ||
     targetUrl.includes('master.')
-  )) {
-    targetUrl = `hls+${targetUrl}`;
-    console.log(`[yt-dlp Engine] ⚡ Auto-detected HLS playlist URL. Transformed to: ${targetUrl}`);
+  );
+
+  if (isHlsPlaylist) {
+    console.log(`[yt-dlp Engine] ⚡ Auto-detected HLS playlist manifest. Enabling FFmpeg downloader mode for: ${targetUrl}`);
   }
 
   const outPattern = outFilename ? path.join(downloadsDir, outFilename) : path.join(downloadsDir, '%(title)s [%(id)s].%(ext)s');
@@ -126,10 +125,14 @@ function startDownload(qItem, onComplete, onError) {
     '--newline',
     '--concurrent-fragments', '8',
     '--remux-video', 'mp4',
-    '--merge-output-format', 'mp4',
-    '-o', outPattern,
-    targetUrl
+    '--merge-output-format', 'mp4'
   ];
+
+  if (isHlsPlaylist) {
+    args.push('--downloader', 'ffmpeg');
+  }
+
+  args.push('-o', outPattern, targetUrl);
 
   console.log(`[yt-dlp] Starting execution: ${executable} ${args.join(' ')}`);
 
