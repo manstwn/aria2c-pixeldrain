@@ -103,16 +103,29 @@ function startDownload(qItem, onComplete, onError) {
 
   const outPattern = outFilename ? path.join(downloadsDir, outFilename) : path.join(downloadsDir, '%(title)s [%(id)s].%(ext)s');
 
+  let targetUrl = (qItem.url || '').trim();
+  // Auto-detect HLS playlist manifests (.txt, .m3u8, .urlset) and force yt-dlp m3u8 protocol
+  if (
+    targetUrl.endsWith('.txt') ||
+    targetUrl.endsWith('.m3u8') ||
+    targetUrl.includes('.urlset/')
+  ) {
+    if (!targetUrl.startsWith('m3u8+') && !targetUrl.startsWith('hls+')) {
+      targetUrl = `m3u8+${targetUrl}`;
+    }
+  }
+
   const args = [
     '-N', '4',
     '--no-playlist',
     '--no-mtime',
     '--newline',
+    '--no-check-certificates',
     '--concurrent-fragments', '8',
     '--remux-video', 'mp4',
     '--merge-output-format', 'mp4',
     '-o', outPattern,
-    qItem.url
+    targetUrl
   ];
 
   console.log(`[yt-dlp] Starting execution: ${executable} ${args.join(' ')}`);
