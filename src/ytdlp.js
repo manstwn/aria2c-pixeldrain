@@ -88,9 +88,87 @@ function parseSizeToBytes(sizeStr) {
 }
 
 /**
+ * Parse output lines from stdout or stderr (handles native yt-dlp & FFmpeg downloader output)
+ */
+function parseYtDlpOutput(line, taskState) {
+  if (!line || typeof line !== 'string') return;
+  const str = line.trim();
+  if (!str) return;
+
+  // 1. Check for Destination or Merger output lines
+  const destMatch = str.match(/(?:[Dd]estination:\s*|[Mm]erging formats into\s*["']?)([^"'\r\n]+)/i);
+  if (destMatch && destMatch[1]) {
+    const rawDest = destMatch[1].trim();
+    if (rawDest.includes('.')) {
+      taskState.filePath = rawDest;
+      taskState.downloadedFilename = path.basename(rawDest);
+      taskState.filename = path.basename(rawDest);
+    }
+  }
+
+  // 2. Standard yt-dlp native progress line:
+  // [download]  45.2% of ~ 10.50MiB at    2.15MiB/s ETA 00:03
+  const progMatch = str.match(/\[download\]\s+([\d.]+)%\s+of\s+~?\s*([\d.]+\s*[KMG]?i?B)(?:\s+at\s+([\d.]+\s*[KMG]?i?B\/s))?/i);
+  if (progMatch) {
+    const percent = parseFloat(progMatch[1]);
+    const totalSizeStr = progMatch[2];
+    const speedStr = progMatch[3] || '';
+
+    const totalBytes = parseSizeToBytes(totalSizeStr);
+    const speedBytes = parseSpeedToBytes(speedStr);
+    const completedBytes = Math.round((percent / 100) * totalBytes);
+
+    taskState.progress = percent;
+    taskState.downloadSpeed = speedBytes;
+    taskState.totalLength = totalBytes;
+    taskState.completedLength = completedBytes;
+    return;
+  }
+
+  // 3. FFmpeg downloader progress line:
+  // size=  880384KiB time=01:07:17.62 bitrate=1786.2kbits/s speed=16.4x
+  const ffmpegSizeMatch = str.match(/size=\s*(\d+)\s*(KiB|kB|MiB|MB|B)?\s+time=\s*([\d:.]+)/i);
+  if (ffmpegSizeMatch) {
+    const rawSize = parseInt(ffmpegSizeMatch[1], 10);
+    const unit = (ffmpegSizeMatch[2] || 'KiB').toUpperCase();
+    let completedBytes = rawSize;
+    if (unit.startsWith('K')) completedBytes = rawSize * 1024;
+    else if (unit.startsWith('M')) completedBytes = rawSize * 1024 * 1024;
+    else if (unit.startsWith('G')) completedBytes = rawSize * 1024 * 1024 * 1024;
+
+    taskState.completedLength = completedBytes;
+
+    const now = Date.now();
+    if (taskState._lastTime && taskState._lastBytes !== undefined) {
+      const timeDiff = (now - taskState._lastTime) / 1000;
+      const bytesDiff = completedBytes - taskState._lastBytes;
+      if (timeDiff >= 0.25 && bytesDiff >= 0) {
+        taskState.downloadSpeed = Math.round(bytesDiff / timeDiff);
+        taskState._lastTime = now;
+        taskState._lastBytes = completedBytes;
+      }
+    } else {
+      taskState._lastTime = now;
+      taskState._lastBytes = completedBytes;
+    }
+
+    if (taskState.totalLength && taskState.totalLength > 0) {
+      taskState.progress = parseFloat(((completedBytes / taskState.totalLength) * 100).toFixed(1));
+    }
+  }
+
+  // 4. HLS segment number tracking (e.g. seg-406-f2-v1-a1.woff2)
+  const segMatch = str.match(/seg-(\d+)-/i);
+  if (segMatch) {
+    const currentSeg = parseInt(segMatch[1], 10);
+    if (!taskState._maxSeg || currentSeg > taskState._maxSeg) {
+      taskState._maxSeg = currentSeg;
+    }
+  }
+}
+
+/**
  * Run yt-dlp download for a queue item
- * Command structure:
- * yt-dlp -N 16 --no-playlist --no-mtime --newline --concurrent-fragments 16 --merge-output-format mp4 -o "<out_path>" "<url>"
  */
 function startDownload(qItem, onComplete, onError) {
   const executable = findYtDlpExecutable();
@@ -176,44 +254,18 @@ function startDownload(qItem, onComplete, onError) {
     child.stdout.on('data', (buffer) => {
       const lines = buffer.toString('utf8').split(/[\r\n]+/);
       for (const line of lines) {
-        if (!line.trim()) continue;
-
-        // Check for Destination or Merger output lines
-        const destMatch = line.match(/(?:[Dd]estination:\s*|[Mm]erging formats into\s*["']?)([^"'\r\n]+)/);
-        if (destMatch && destMatch[1]) {
-          const rawDest = destMatch[1].trim();
-          if (rawDest.includes('.')) {
-            taskState.filePath = rawDest;
-            taskState.downloadedFilename = path.basename(rawDest);
-            taskState.filename = path.basename(rawDest);
-          }
-        }
-
-        // Parse progress line:
-        // [download]  45.2% of ~ 10.50MiB at    2.15MiB/s ETA 00:03
-        // [download] 100% of 15.34MiB in 00:05
-        const progMatch = line.match(/\[download\]\s+([\d.]+)%\s+of\s+~?\s*([\d.]+\s*[KMG]?i?B)(?:\s+at\s+([\d.]+\s*[KMG]?i?B\/s))?/i);
-        if (progMatch) {
-          const percent = parseFloat(progMatch[1]);
-          const totalSizeStr = progMatch[2];
-          const speedStr = progMatch[3] || '';
-
-          const totalBytes = parseSizeToBytes(totalSizeStr);
-          const speedBytes = parseSpeedToBytes(speedStr);
-          const completedBytes = Math.round((percent / 100) * totalBytes);
-
-          taskState.progress = percent;
-          taskState.downloadSpeed = speedBytes;
-          taskState.totalLength = totalBytes;
-          taskState.completedLength = completedBytes;
-        }
+        parseYtDlpOutput(line, taskState);
       }
     });
 
     child.stderr.on('data', (buffer) => {
-      const errStr = buffer.toString('utf8').trim();
-      if (errStr && !errStr.includes('[download]')) {
-        console.warn(`[yt-dlp stderr] ${errStr}`);
+      const lines = buffer.toString('utf8').split(/[\r\n]+/);
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        parseYtDlpOutput(line, taskState);
+        if (!line.includes('[download]') && !line.includes('size=') && !line.includes('Opening')) {
+          console.warn(`[yt-dlp stderr] ${line.trim()}`);
+        }
       }
     });
 

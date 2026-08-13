@@ -327,7 +327,7 @@ function renderActiveDownloads(downloads) {
     const itemsHTML = activeDownloadingTasks.map(task => {
       const speed = task.downloadSpeed ? `${formatBytes(task.downloadSpeed)}/s` : '0 B/s';
       const downloadedStr = formatBytes(task.completedLength || 0);
-      const totalStr = formatBytes(task.totalLength || 0);
+      const totalStr = (task.totalLength && task.totalLength > 0) ? formatBytes(task.totalLength) : 'Stream';
       const isDownloading = task.status === 'DOWNLOADING' || task.status === 'active';
       const isUploading = task.status === 'UPLOADING';
       const isProcessing = task.status === 'PROCESSING';
@@ -355,15 +355,17 @@ function renderActiveDownloads(downloads) {
       ` : '';
 
       const engineLabel = task.engine === 'ytdlp' ? 'yt-dlp Stream' : 'Aria2 Download';
+      const progressDisplay = (task.progress && task.progress > 0) ? `${task.progress}%` : (task.completedLength > 0 ? 'Streaming' : '0%');
+      const progressWidth = (task.progress && task.progress > 0) ? task.progress : (task.completedLength > 0 ? 100 : 0);
 
       const downloadStageHTML = (!isUploading && !isProcessing) ? `
         <div class="download-stats">
-          <span>${engineLabel}: <strong>${task.progress}%</strong></span>
-          <span>Downloaded: ${downloadedStr} / ${totalStr}</span>
+          <span>${engineLabel}: <strong>${progressDisplay}</strong></span>
+          <span>Downloaded: ${downloadedStr} ${(task.totalLength && task.totalLength > 0) ? `/ ${totalStr}` : '(Stream)'}</span>
           <span>Speed: ⚡ <strong>${speed}</strong></span>
         </div>
         <div class="progress-bar-bg" style="margin-top: 10px;">
-          <div class="progress-bar-fill" style="width: ${task.progress}%"></div>
+          <div class="progress-bar-fill ${(!task.progress || task.progress === 0) && task.completedLength > 0 ? 'uploading' : ''}" style="width: ${progressWidth}%"></div>
         </div>
       ` : '';
 
