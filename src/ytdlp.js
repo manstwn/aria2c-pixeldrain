@@ -101,26 +101,27 @@ function startDownload(qItem, onComplete, onError) {
     outFilename += '.mp4';
   }
 
-  const outPattern = outFilename ? path.join(downloadsDir, outFilename) : path.join(downloadsDir, '%(title)s [%(id)s].%(ext)s');
+  let targetUrl = qItem.url ? qItem.url.trim() : '';
 
-  let targetUrl = (qItem.url || '').trim();
-  // Auto-detect HLS playlist manifests (.txt, .m3u8, .urlset) and force yt-dlp m3u8 protocol
-  if (
+  // Auto-detect HLS playlist URLs ending in .txt, .m3u8, or containing .urlset / index- / master.
+  if (targetUrl && !targetUrl.startsWith('hls+') && (
     targetUrl.endsWith('.txt') ||
     targetUrl.endsWith('.m3u8') ||
-    targetUrl.includes('.urlset/')
-  ) {
-    if (!targetUrl.startsWith('m3u8+') && !targetUrl.startsWith('hls+')) {
-      targetUrl = `m3u8+${targetUrl}`;
-    }
+    targetUrl.includes('.urlset/') ||
+    targetUrl.includes('index-') ||
+    targetUrl.includes('master.')
+  )) {
+    targetUrl = `hls+${targetUrl}`;
+    console.log(`[yt-dlp Engine] ⚡ Auto-detected HLS playlist URL. Transformed to: ${targetUrl}`);
   }
+
+  const outPattern = outFilename ? path.join(downloadsDir, outFilename) : path.join(downloadsDir, '%(title)s [%(id)s].%(ext)s');
 
   const args = [
     '-N', '4',
     '--no-playlist',
     '--no-mtime',
     '--newline',
-    '--no-check-certificates',
     '--concurrent-fragments', '8',
     '--remux-video', 'mp4',
     '--merge-output-format', 'mp4',
