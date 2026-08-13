@@ -56,7 +56,14 @@ function getVideoDuration(filePath, meta = {}) {
 }
 
 /**
- * Fast video frame extraction using FFmpeg keyframe seeking and 720p max thumbnail downscaling
+ * Helper sleep function to let CPU & event loop breathe
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Fast video frame extraction using FFmpeg keyframe seeking and 480p max thumbnail downscaling
  */
 function extractVideoFrame(filePath, timestampSeconds, outputPath) {
   return new Promise((resolve) => {
@@ -64,15 +71,15 @@ function extractVideoFrame(filePath, timestampSeconds, outputPath) {
       '-ss', timestampSeconds.toString(),
       '-noaccurate_seek',
       '-i', filePath,
-      '-vf', "scale='min(1280,iw)':-1",
+      '-vf', "scale='min(640,iw)':-1",
       '-vframes', '1',
-      '-threads', '2',
+      '-threads', '1',
       '-q:v', '4',
       '-y',
       outputPath
     ];
 
-    execFile('ffmpeg', args, { timeout: 6000 }, (error) => {
+    execFile('ffmpeg', args, { timeout: 8000 }, (error) => {
       if (!error && fs.existsSync(outputPath)) {
         resolve(true);
       } else {
@@ -80,13 +87,14 @@ function extractVideoFrame(filePath, timestampSeconds, outputPath) {
         const fallbackArgs = [
           '-ss', timestampSeconds.toString(),
           '-i', filePath,
-          '-vf', "scale='min(1280,iw)':-1",
+          '-vf', "scale='min(640,iw)':-1",
           '-vframes', '1',
+          '-threads', '1',
           '-q:v', '4',
           '-y',
           outputPath
         ];
-        execFile('ffmpeg', fallbackArgs, { timeout: 6000 }, (err2) => {
+        execFile('ffmpeg', fallbackArgs, { timeout: 8000 }, (err2) => {
           resolve(!err2 && fs.existsSync(outputPath));
         });
       }
@@ -95,7 +103,7 @@ function extractVideoFrame(filePath, timestampSeconds, outputPath) {
 }
 
 /**
- * Ultra-Fast Single-Pass FFmpeg 15-frame video extraction (720p max resolution across entire duration)
+ * Single-Pass FFmpeg 15-frame video extraction (480p max resolution across entire duration, 1 thread)
  */
 function extractVideoFramesSinglePass(filePath, durationSeconds, fileId) {
   return new Promise((resolve) => {
@@ -106,15 +114,15 @@ function extractVideoFramesSinglePass(filePath, durationSeconds, fileId) {
 
     const args = [
       '-i', filePath,
-      '-vf', `fps=${fpsRate},scale='min(1280,iw)':-1`,
+      '-vf', `fps=${fpsRate},scale='min(640,iw)':-1`,
       '-vframes', count.toString(),
-      '-threads', '2',
+      '-threads', '1',
       '-q:v', '4',
       '-y',
       outPattern
     ];
 
-    execFile('ffmpeg', args, { timeout: 15000 }, () => {
+    execFile('ffmpeg', args, { timeout: 30000 }, () => {
       const generated = [];
       for (let i = 1; i <= count; i++) {
         const fn = `${fileId}-image-${i}.jpg`;
@@ -169,7 +177,7 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
   }
 
   // =========================================================================
-  // VIDEO 15-FRAME SCREENSHOT GENERATION (SINGLE-PASS ULTRA FAST)
+  // VIDEO 15-FRAME SCREENSHOT GENERATION (1 vCPU / 1GB RAM SAFE)
   // =========================================================================
   if (category === 'video' || treatAsVideo) {
     if (!isFFmpegAvailable()) {
@@ -180,12 +188,12 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
     const duration = getVideoDuration(filePath, meta);
     const count = 15;
     const formattedMins = (duration / 60).toFixed(1);
-    console.log(`[Thumbnails] ⚡ Single-Pass extracting ${count} frame screenshots for ${path.basename(filePath)} (${duration}s / ${formattedMins}m)...`);
+    console.log(`[Thumbnails] ⚡ Ultra-Low-Resource extracting ${count} 480p frame screenshots for ${path.basename(filePath)} (${duration}s / ${formattedMins}m)...`);
 
-    // 1. Primary: Try single-pass extraction (1 single FFmpeg process)
+    // 1. Primary: Try single-pass extraction with 1 thread & 480p scale
     const singlePassFrames = await extractVideoFramesSinglePass(filePath, duration, fileId);
     if (singlePassFrames.length === count) {
-      console.log(`[Thumbnails] 🚀 Generated all ${singlePassFrames.length}/${count} video frame screenshots for ${fileId} in 1-pass lightning mode!`);
+      console.log(`[Thumbnails] 🚀 Generated all ${singlePassFrames.length}/${count} 480p video frame screenshots for ${fileId}!`);
       return singlePassFrames;
     }
 
@@ -199,8 +207,8 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
       });
     }
 
-    // 2. Secondary Fallback: Seek-based batching (batchSize = 2 for low RAM & 100% 15/15 frames)
-    console.log(`[Thumbnails] Running low-memory seek extraction to guarantee all ${count}/${count} frame screenshots...`);
+    // 2. Secondary Fallback: Strict 1-by-1 sequential keyframe seeking (batchSize = 1, threads = 1, 150ms CPU breath delay)
+    console.log(`[Thumbnails] Running 1-by-1 sequential seek extraction (480p, 1-thread, CPU-friendly)...`);
     const interval = duration / (count + 1);
     const tasks = [];
     for (let i = 1; i <= count; i++) {
@@ -210,16 +218,13 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
       tasks.push({ i, targetTime, outFilename, outPath });
     }
 
-    // Controlled batch size of 2 processes: Low CPU & low RAM, but 100% 15/15 frames guaranteed!
-    const batchSize = 2;
-    for (let b = 0; b < tasks.length; b += batchSize) {
-      const batch = tasks.slice(b, b + batchSize);
-      await Promise.all(batch.map(async (task) => {
-        const success = await extractVideoFrame(filePath, task.targetTime, task.outPath);
-        if (success) {
-          thumbnails.push(`/data/image/${task.outFilename}`);
-        }
-      }));
+    // Strict sequential execution: 1 process at a time with CPU breath delay
+    for (const task of tasks) {
+      const success = await extractVideoFrame(filePath, task.targetTime, task.outPath);
+      if (success) {
+        thumbnails.push(`/data/image/${task.outFilename}`);
+      }
+      await sleep(150); // Give 150ms for CPU & Node event loop to breathe
     }
 
     thumbnails.sort((a, b) => {
@@ -228,7 +233,7 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
       return numA - numB;
     });
 
-    console.log(`[Thumbnails] ✅ Generated ${thumbnails.length}/${count} video frame screenshots for ${fileId}!`);
+    console.log(`[Thumbnails] ✅ Generated ${thumbnails.length}/${count} 480p video frame screenshots for ${fileId}!`);
     return thumbnails;
   }
 
