@@ -211,14 +211,18 @@ function startDownload(qItem, onComplete, onError) {
   const args = [
     '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     '--no-check-certificates',
-    '--downloader', 'aria2c',
-    '--downloader-args', 'aria2c:-j8 -s8 -x8',
     '--no-playlist',
     '--no-mtime',
     '--newline',
     '--remux-video', 'mp4',
     '--merge-output-format', 'mp4'
   ];
+
+  if (isHlsPlaylist) {
+    args.push('-N', '4', '--concurrent-fragments', '4');
+  } else {
+    args.push('--downloader', 'aria2c', '--downloader-args', 'aria2c:-j8 -s8 -x8');
+  }
 
   if (refererUrl) {
     args.push('--referer', refererUrl);
@@ -419,7 +423,7 @@ function removeDownload(gid) {
       }
     }
 
-    const downloadsDir = path.resolve(DOWNLOADS_DIR);
+    const downloadsDir = path.resolve(db.DOWNLOADS_DIR);
     if (fs.existsSync(downloadsDir)) {
       try {
         const filesInDir = fs.readdirSync(downloadsDir);
@@ -479,7 +483,7 @@ function killAllActiveYtDlpProcesses() {
  */
 function cleanUpOrphanedTempFiles() {
   try {
-    const downloadsDir = path.resolve(DOWNLOADS_DIR);
+    const downloadsDir = path.resolve(db.DOWNLOADS_DIR);
     if (!fs.existsSync(downloadsDir)) return;
 
     const files = fs.readdirSync(downloadsDir);
