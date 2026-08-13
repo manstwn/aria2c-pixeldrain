@@ -211,11 +211,11 @@ function startDownload(qItem, onComplete, onError) {
   const args = [
     '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     '--no-check-certificates',
-    '-N', '1',
+    '--downloader', 'aria2c',
+    '--downloader-args', 'aria2c:-j8 -s8 -x8',
     '--no-playlist',
     '--no-mtime',
     '--newline',
-    '--concurrent-fragments', '4',
     '--remux-video', 'mp4',
     '--merge-output-format', 'mp4'
   ];
