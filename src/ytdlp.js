@@ -46,6 +46,8 @@ function getDownloadsStatus() {
       downloadSpeed: task.downloadSpeed || 0,
       completedLength: task.completedLength || 0,
       totalLength: task.totalLength || 0,
+      fragCurrent: task.fragCurrent || 0,
+      fragTotal: task.fragTotal || 0,
       uploadProgress: task.uploadProgress || 0,
       uploadLoaded: task.uploadLoaded || 0,
       uploadTotal: task.uploadTotal || 0,
@@ -107,12 +109,14 @@ function parseYtDlpOutput(line, taskState) {
   }
 
   // 2. Standard yt-dlp native progress line:
-  // [download]  45.2% of ~ 10.50MiB at    2.15MiB/s ETA 00:03
-  const progMatch = str.match(/\[download\]\s+([\d.]+)%\s+of\s+~?\s*([\d.]+\s*[KMG]?i?B)(?:\s+at\s+([\d.]+\s*[KMG]?i?B\/s))?/i);
+  // [download]  19.1% of ~   1.00GiB at   10.66MiB/s ETA 01:25 (frag 207/1085)
+  const progMatch = str.match(/\[download\]\s+([\d.]+)%\s+of\s+~?\s*([\d.]+\s*[KMG]?i?B)(?:\s+at\s+([\d.]+\s*[KMG]?i?B\/s))?(?:.*\(frag\s+(\d+)\/(\d+)\))?/i);
   if (progMatch) {
     const percent = parseFloat(progMatch[1]);
     const totalSizeStr = progMatch[2];
     const speedStr = progMatch[3] || '';
+    const fragCurrent = progMatch[4] ? parseInt(progMatch[4], 10) : 0;
+    const fragTotal = progMatch[5] ? parseInt(progMatch[5], 10) : 0;
 
     const totalBytes = parseSizeToBytes(totalSizeStr);
     const speedBytes = parseSpeedToBytes(speedStr);
@@ -122,10 +126,14 @@ function parseYtDlpOutput(line, taskState) {
     taskState.downloadSpeed = speedBytes;
     taskState.totalLength = totalBytes;
     taskState.completedLength = completedBytes;
+    if (fragCurrent && fragTotal) {
+      taskState.fragCurrent = fragCurrent;
+      taskState.fragTotal = fragTotal;
+    }
     return;
   }
 
-  // 3. FFmpeg downloader progress line:
+  // 3. FFmpeg downloader progress line fallback:
   // size=  880384KiB time=01:07:17.62 bitrate=1786.2kbits/s speed=16.4x
   const ffmpegSizeMatch = str.match(/size=\s*(\d+)\s*(KiB|kB|MiB|MB|B)?\s+time=\s*([\d:.]+)/i);
   if (ffmpegSizeMatch) {
@@ -189,7 +197,7 @@ function startDownload(qItem, onComplete, onError) {
   );
 
   if (isHlsPlaylist) {
-    console.log(`[yt-dlp Engine] ⚡ Auto-detected HLS playlist manifest. Enabling FFmpeg downloader mode for: ${targetUrl}`);
+    console.log(`[yt-dlp Engine] ⚡ Auto-detected HLS playlist manifest: ${targetUrl}`);
   }
 
   const outPattern = outFilename ? path.join(downloadsDir, outFilename) : path.join(downloadsDir, '%(title)s [%(id)s].%(ext)s');
@@ -214,10 +222,6 @@ function startDownload(qItem, onComplete, onError) {
 
   if (refererUrl) {
     args.push('--referer', refererUrl);
-  }
-
-  if (isHlsPlaylist) {
-    args.push('--downloader', 'ffmpeg');
   }
 
   args.push('-o', outPattern, targetUrl);

@@ -357,12 +357,16 @@ function renderActiveDownloads(downloads) {
       const engineLabel = task.engine === 'ytdlp' ? 'yt-dlp Stream' : 'Aria2 Download';
       const progressDisplay = (task.progress && task.progress > 0) ? `${task.progress}%` : (task.completedLength > 0 ? 'Streaming' : '0%');
       const progressWidth = (task.progress && task.progress > 0) ? task.progress : (task.completedLength > 0 ? 100 : 0);
+      const fragTag = (task.fragCurrent && task.fragTotal)
+        ? `<span>Fragments: 🧩 <strong>${task.fragCurrent} / ${task.fragTotal}</strong></span>`
+        : '';
 
       const downloadStageHTML = (!isUploading && !isProcessing) ? `
         <div class="download-stats">
           <span>${engineLabel}: <strong>${progressDisplay}</strong></span>
           <span>Downloaded: ${downloadedStr} ${(task.totalLength && task.totalLength > 0) ? `/ ${totalStr}` : '(Stream)'}</span>
           <span>Speed: ⚡ <strong>${speed}</strong></span>
+          ${fragTag}
         </div>
         <div class="progress-bar-bg" style="margin-top: 10px;">
           <div class="progress-bar-fill ${(!task.progress || task.progress === 0) && task.completedLength > 0 ? 'uploading' : ''}" style="width: ${progressWidth}%"></div>
