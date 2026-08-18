@@ -397,7 +397,7 @@ function renderGalleryPage() {
     const meta = file.metadata || {};
     const cat = meta.category || 'file';
     const catIcon = cat === 'video' ? '🎬' : cat === 'image' ? '🖼️' : cat === 'audio' ? '🎵' : cat === 'archive' ? '📦' : '📄';
-    const displayName = file.custom_name || file.filename;
+    const displayName = file.custom_name || file.original_filename || file.filename;
     const thumbs = file.thumbnails || [];
     const thumbUrl = file.selected_thumbnail || (thumbs.length > 0 ? thumbs[0] : null);
 
@@ -650,7 +650,7 @@ function openGalleryModal(fileId) {
   const selectedIdx = file.thumbnails.indexOf(file.selected_thumbnail);
   currentGalleryIndex = selectedIdx !== -1 ? selectedIdx : 0;
 
-  const displayName = file.custom_name || file.filename;
+  const displayName = file.custom_name || file.original_filename || file.filename;
   document.getElementById('galleryModalTitle').textContent = displayName;
 
   const modal = document.getElementById('galleryModal');
@@ -766,7 +766,7 @@ function showFileMetadata(id) {
   const catIcon = cat === 'video' ? '🎬' : cat === 'image' ? '🖼️' : cat === 'audio' ? '🎵' : cat === 'archive' ? '📦' : '📄';
 
   document.getElementById('metaCategoryIcon').textContent = catIcon;
-  titleEl.textContent = file.custom_name || file.filename;
+  titleEl.textContent = file.custom_name || file.original_filename || file.filename;
 
   let items = [
     { label: 'File ID', value: file.id },

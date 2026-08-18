@@ -224,10 +224,18 @@
     <!-- TOP NAVIGATION BAR -->
     <header class="app-topbar">
       <div class="header-left">
-        <button type="button" onclick="goBackToGallery()" class="btn-table-action" style="padding: 5px 10px; display: flex; align-items: center; gap: 4px;" title="Back to Gallery view">
+        <button type="button" onclick="goBackToGallery()" class="btn-table-action" style="padding: 6px 12px; display: flex; align-items: center; gap: 6px;" title="Back to Gallery view">
           <span class="material-symbols-outlined" style="font-size: 16px;">arrow_back</span> Back
         </button>
-        <span class="brand-title">PixelTouch Cinema</span>
+        <a href="/" class="brand-badge-container">
+          <div class="brand-icon-mini glow-blue">
+            <span class="material-symbols-outlined" style="font-size: 20px;">smart_display</span>
+          </div>
+          <div class="brand-text-col">
+            <span class="brand-title">PixelTouch</span>
+            <span class="brand-subtitle">Cinema Player</span>
+          </div>
+        </a>
 
         <nav class="header-nav-links">
           <a href="/" class="header-nav-link">
@@ -251,7 +259,7 @@
         <!-- SSE Stream Green Dot Badge -->
         <div class="status-indicator-pill sse-pill" title="Real-Time SSE Stream Active">
           <span class="status-dot online pulse-emerald"></span>
-          <span>SSE</span>
+          <span>SSE Live</span>
         </div>
 
         <!-- Logout Power Button -->

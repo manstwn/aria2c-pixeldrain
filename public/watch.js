@@ -136,7 +136,7 @@ async function loadVideoDetails() {
       return;
     }
 
-    const displayName = currentFile.custom_name || currentFile.filename;
+    const displayName = currentFile.custom_name || currentFile.original_filename || currentFile.filename;
     document.title = `${displayName} | PixelTouch Cinema`;
     document.getElementById('videoTitle').textContent = displayName;
 
@@ -301,7 +301,7 @@ function updateWatchModalContent() {
   const downloadLink = document.getElementById('watchModalDownload');
 
   if (img) img.src = url;
-  if (title) title.textContent = `${currentFile.custom_name || currentFile.filename} - Frame #${watchModalIndex + 1}`;
+  if (title) title.textContent = `${currentFile.custom_name || currentFile.original_filename || currentFile.filename} - Frame #${watchModalIndex + 1}`;
   if (counter) counter.textContent = `Frame ${watchModalIndex + 1} of ${thumbs.length}`;
   if (downloadLink) downloadLink.href = url;
 }

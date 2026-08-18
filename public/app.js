@@ -82,6 +82,8 @@ function connectSSE() {
       if (data.dataSizeFormatted) {
         const storageText = document.getElementById('storageText');
         if (storageText) storageText.textContent = data.dataSizeFormatted;
+        const metricStorage = document.getElementById('metricStorageSize');
+        if (metricStorage) metricStorage.textContent = data.dataSizeFormatted;
       }
 
       if (data.downloads) {
@@ -762,7 +764,7 @@ function renderLedger() {
       const cat = meta.category || 'file';
       const catIcon = cat === 'video' ? '🎬' : cat === 'image' ? '🖼️' : cat === 'audio' ? '🎵' : cat === 'archive' ? '📦' : '📄';
 
-      const displayName = file.custom_name || file.filename;
+      const displayName = file.custom_name || file.original_filename || file.filename;
       let rawEngine = file.engine || file.method || (file.metadata && file.metadata.engine);
       if (!rawEngine) {
         const src = (file.source_url || '').toLowerCase();
@@ -910,7 +912,7 @@ function renderLedger() {
         metaPills.push(`<a href="${escapeHtml(file.source_url)}" target="_blank" rel="noopener" class="meta-pill source" title="${escapeHtml(file.source_url)}">🌐 Source</a>`);
       }
 
-      const displayName = file.custom_name || file.filename;
+      const displayName = file.custom_name || file.original_filename || file.filename;
       const originalName = file.original_filename || file.filename;
 
       const originalRow = (originalName && originalName !== displayName)
@@ -976,7 +978,7 @@ function showFileMetadata(id) {
   const cat = meta.category || 'file';
   const catIcon = cat === 'video' ? '🎬' : cat === 'image' ? '🖼️' : cat === 'audio' ? '🎵' : cat === 'archive' ? '📦' : '📄';
 
-  const displayName = file.custom_name || file.filename;
+  const displayName = file.custom_name || file.original_filename || file.filename;
   const originalName = file.original_filename || file.filename;
 
   document.getElementById('metaCategoryIcon').textContent = catIcon;
@@ -1259,7 +1261,7 @@ function openGalleryModal(id) {
   const selectedIdx = file.thumbnails.indexOf(file.selected_thumbnail);
   currentGalleryIndex = selectedIdx !== -1 ? selectedIdx : 0;
 
-  const displayName = file.custom_name || file.filename;
+  const displayName = file.custom_name || file.original_filename || file.filename;
   document.getElementById('galleryModalTitle').textContent = `${displayName} — Screenshot Gallery`;
 
   renderGalleryState();
@@ -1411,7 +1413,7 @@ function renderGallery() {
     const meta = file.metadata || {};
     const cat = meta.category || 'file';
     const catIcon = cat === 'video' ? '🎬' : cat === 'image' ? '🖼️' : cat === 'audio' ? '🎵' : cat === 'archive' ? '📦' : '📄';
-    const displayName = file.custom_name || file.filename;
+    const displayName = file.custom_name || file.original_filename || file.filename;
     const thumbUrl = (file.thumbnails && file.thumbnails.length > 0) ? file.thumbnails[0] : null;
 
     let metaPills = [];
@@ -1493,7 +1495,7 @@ function openEditModal(fileId) {
   const urlInput = document.getElementById('editDownloadUrl');
 
   if (fileIdInput) fileIdInput.value = file.id;
-  if (nameInput) nameInput.value = file.custom_name || file.filename;
+  if (nameInput) nameInput.value = file.custom_name || file.original_filename || file.filename;
   if (catSelect) catSelect.value = meta.category || 'other';
   if (statusSelect) statusSelect.value = file.status || 'LIVE';
   if (engineSelect) engineSelect.value = file.engine || file.method || (meta.engine) || 'aria2c';

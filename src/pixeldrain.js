@@ -29,18 +29,49 @@ function uploadToPixeldrain(filePath, overrideFilename, onProgress = null, sourc
 
     metadata.sanitizeVideoFile(filePath);
 
-    const filename = overrideFilename || path.basename(filePath);
+    // 1. Generate local DB ID first so upload filename directly reflects file ID
+    const recordId = db.generateId();
+
+    // 2. Determine file extension
+    let ext = path.extname(filePath);
+    if (!ext && overrideFilename) {
+      ext = path.extname(overrideFilename);
+    }
+    if (!ext && sourceUrl) {
+      try {
+        const parsedUrl = new URL(sourceUrl);
+        ext = path.extname(parsedUrl.pathname);
+      } catch (e) {}
+    }
+    if (!ext) {
+      try {
+        const preMeta = metadata.extractMetadata(filePath, sourceUrl);
+        if (preMeta && preMeta.extension) {
+          ext = '.' + preMeta.extension;
+        }
+      } catch (e) {}
+    }
+    if (!ext) {
+      ext = '.mp4';
+    }
+    if (!ext.startsWith('.')) {
+      ext = '.' + ext;
+    }
+
+    // 3. Construct ID-based filename (e.g. gt_1784845422811_393.mp4)
+    const pixelFilename = `${recordId}${ext}`;
+
     const token = (process.env.PIXELDRAIN_API_TOKEN || '').trim();
     const stats = fs.statSync(filePath);
     const fileSizeMB = (stats.size / (1024 * 1024)).toFixed(2);
 
-    console.log(`[Pixeldrain] Preparing upload for ${filename} (${fileSizeMB} MB)...`);
+    console.log(`[Pixeldrain] Preparing upload for ${pixelFilename} (${fileSizeMB} MB) [Source/Original: ${overrideFilename || path.basename(filePath)}]...`);
     
     if (!token) {
       throw new Error('PIXELDRAIN_API_TOKEN is required for Pixeldrain uploads.');
     }
 
-    const uploadUrl = `https://pixeldrain.com/api/file/${encodeURIComponent(filename)}`;
+    const uploadUrl = `https://pixeldrain.com/api/file/${encodeURIComponent(pixelFilename)}`;
 
     activeFileStream = fs.createReadStream(filePath);
     let loadedBytes = 0;
@@ -151,7 +182,11 @@ function uploadToPixeldrain(filePath, overrideFilename, onProgress = null, sourc
         } catch (e) {}
       }
 
-      const recordId = db.generateId();
+      // Preserve user custom display name if provided and different from original & generated ID name
+      let customDisplayName = '';
+      if (overrideFilename && overrideFilename !== originalFilename && overrideFilename !== pixelFilename && overrideFilename !== path.basename(filePath)) {
+        customDisplayName = overrideFilename;
+      }
 
       const cat = fileMeta.category || 'file';
       if (onProgress) {
@@ -171,8 +206,8 @@ function uploadToPixeldrain(filePath, overrideFilename, onProgress = null, sourc
       const now = new Date().toISOString();
       const record = db.addFile({
         id: recordId,
-        filename: filename,
-        custom_name: (filename && filename !== originalFilename) ? filename : '',
+        filename: pixelFilename,
+        custom_name: customDisplayName,
         original_filename: originalFilename,
         source_url: sourceUrl || '',
         engine: engine || 'aria2',
@@ -185,7 +220,7 @@ function uploadToPixeldrain(filePath, overrideFilename, onProgress = null, sourc
         thumbnails: thumbs
       });
 
-      console.log(`[Pixeldrain] ✅ Upload successful! Filename: ${filename} | Download URL: ${downloadPage}`);
+      console.log(`[Pixeldrain] ✅ Upload successful! ID Filename: ${pixelFilename} | Download URL: ${downloadPage}`);
       return record;
 
     } catch (err) {
@@ -195,7 +230,7 @@ function uploadToPixeldrain(filePath, overrideFilename, onProgress = null, sourc
         const dataStr = typeof err.response.data === 'object' ? JSON.stringify(err.response.data) : err.response.data;
         detailedError = `HTTP ${status}: ${dataStr || err.message}`;
       }
-      console.error(`[Pixeldrain Error] Failed to upload ${filename}: ${detailedError}`);
+      console.error(`[Pixeldrain Error] Failed to upload ${pixelFilename}: ${detailedError}`);
       throw new Error(detailedError);
 
     } finally {
