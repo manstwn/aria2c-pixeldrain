@@ -11,6 +11,7 @@ const ytdlp = require('./src/ytdlp');
 const touchManager = require('./src/touchManager');
 const s3Storage = require('./src/s3Storage');
 const mongoClient = require('./src/mongoClient');
+const cloudflared = require('./src/cloudflared');
 const logger = require('./src/logger');
 
 const app = express();
@@ -640,6 +641,9 @@ app.listen(PORT, '0.0.0.0', async () => {
   aria2.startMonitor();
   touchManager.initScheduler();
 
+  // Summon Cloudflare Tunnel daemon if ENABLE_CLOUDFLARED=true in .env
+  cloudflared.startCloudflared();
+
   // On startup: kill leftover OS child processes & wipe temporary files from disk
   setTimeout(async () => {
     ytdlp.killAllActiveYtDlpProcesses();
@@ -667,6 +671,7 @@ app.listen(PORT, '0.0.0.0', async () => {
 function handleGracefulShutdown(signal) {
   console.log(`\n[Server Shutdown] Received ${signal}. Terminating child processes and cleaning disk...`);
   try {
+    cloudflared.stopCloudflared();
     ytdlp.killAllActiveYtDlpProcesses();
     ytdlp.cleanUpOrphanedTempFiles();
   } catch (e) {}
