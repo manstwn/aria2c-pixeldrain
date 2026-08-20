@@ -40,6 +40,8 @@ function showDashboard() {
 
   fetchDownloads();
   fetchFiles();
+  fetchDbStatus();
+  fetchS3Status();
   connectSSE();
 }
 
@@ -1873,3 +1875,381 @@ async function quickRemoveFileTag(e, fileId, tag) {
     fetchFiles();
   }
 }
+
+/* ==========================================================================
+   S3 IMAGE STORAGE & MIGRATION HANDLERS
+   ========================================================================== */
+
+let isS3Syncing = false;
+
+async function fetchS3Status() {
+  try {
+    const res = await fetch('/api/s3/status');
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    const pill = document.getElementById('s3StatusPill');
+    const pillText = document.getElementById('s3StatusText');
+
+    if (pill && pillText) {
+      if (data.configured) {
+        pillText.textContent = `S3: /${data.folderPrefix ? data.folderPrefix.replace(/\/$/, '') : 'aria2c'}`;
+        pill.title = `S3 Storage Active (Bucket: ${data.bucket} | Prefix: /${data.folderPrefix || 'aria2c'})`;
+        pill.style.borderColor = 'rgba(56, 189, 248, 0.4)';
+      } else {
+        pillText.textContent = 'S3: Off';
+        pill.title = 'S3 storage credentials not configured in .env';
+        pill.style.borderColor = 'rgba(244, 63, 94, 0.4)';
+      }
+    }
+
+    // Update modal elements if open
+    const badge = document.getElementById('s3ModalConfigBadge');
+    const bucketEl = document.getElementById('s3ModalBucket');
+    const prefixEl = document.getElementById('s3ModalPrefix');
+    const localEl = document.getElementById('s3ModalLocalImages');
+    const btnSync = document.getElementById('btnRunS3Sync');
+
+    if (badge) {
+      badge.textContent = data.configured ? 'Configured (Active)' : 'Not Configured';
+      badge.className = data.configured ? 'status-pill live' : 'status-pill dead';
+    }
+    if (bucketEl) bucketEl.textContent = data.bucket || '(Not Configured in .env)';
+    if (prefixEl) prefixEl.textContent = `/${data.folderPrefix || 'aria2c/'}`;
+    if (localEl) {
+      localEl.textContent = `${data.localImageCount || 0} image(s) (${data.localImageSizeFormatted || '0 B'})`;
+      localEl.style.color = (data.localImageCount > 0) ? '#f59e0b' : '#34d399';
+    }
+    if (btnSync) {
+      btnSync.disabled = !data.configured || isS3Syncing || (data.localImageCount === 0);
+      if (!data.configured) {
+        btnSync.title = 'Please configure S3 credentials in .env first';
+      } else if (data.localImageCount === 0) {
+        btnSync.title = 'All images are already synced to S3 (0 local images on disk)';
+      } else {
+        btnSync.title = `Push ${data.localImageCount} local images to S3`;
+      }
+    }
+
+    return data;
+  } catch (err) {
+    console.error('Error fetching S3 status:', err);
+    return null;
+  }
+}
+
+async function openS3SyncModal() {
+  const modal = document.getElementById('s3SyncModal');
+  if (!modal) return;
+
+  modal.classList.remove('hidden');
+  await fetchS3Status();
+}
+
+function closeS3SyncModal() {
+  const modal = document.getElementById('s3SyncModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function startS3ImageSync() {
+  if (isS3Syncing) return;
+
+  const btnSync = document.getElementById('btnRunS3Sync');
+  const progressContainer = document.getElementById('s3SyncProgressContainer');
+  const progressBar = document.getElementById('s3SyncProgressBar');
+  const statusLabel = document.getElementById('s3SyncStatusLabel');
+  const percentLabel = document.getElementById('s3SyncPercentLabel');
+
+  isS3Syncing = true;
+  if (btnSync) {
+    btnSync.disabled = true;
+    btnSync.innerHTML = '<span class="status-dot online pulse-emerald" style="display:inline-block; margin-right:4px;"></span> Syncing...';
+  }
+
+  if (progressContainer) progressContainer.classList.remove('hidden');
+  if (progressBar) progressBar.style.width = '30%';
+  if (statusLabel) statusLabel.textContent = 'Pushing local images to S3 (/aria2c)...';
+  if (percentLabel) percentLabel.textContent = 'In Progress';
+
+  try {
+    const res = await fetch('/api/s3/sync-images', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const data = await res.json();
+
+    if (progressBar) progressBar.style.width = '100%';
+    if (percentLabel) percentLabel.textContent = '100%';
+
+    if (res.ok && data.success) {
+      if (statusLabel) {
+        statusLabel.textContent = `✅ Completed: ${data.uploaded} uploaded, ${data.failed} failed. Freed ${data.freedBytesFormatted || '0 B'}.`;
+      }
+      showToast(`☁️ S3 Sync Finished: ${data.uploaded} image(s) migrated to S3, freed ${data.freedBytesFormatted || '0 B'} from disk!`, 'success');
+      await fetchFiles();
+      await fetchS3Status();
+    } else {
+      if (statusLabel) statusLabel.textContent = `❌ Error: ${data.error || 'Failed to sync images'}`;
+      showToast(data.error || 'S3 sync error', 'error');
+    }
+  } catch (err) {
+    if (statusLabel) statusLabel.textContent = `❌ Network error during S3 sync`;
+    showToast('Network error during S3 sync', 'error');
+  } finally {
+    isS3Syncing = false;
+    if (btnSync) {
+      btnSync.disabled = false;
+      btnSync.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">cloud_upload</span> Push Local Images to S3';
+    }
+    await fetchS3Status();
+  }
+}
+
+/* ==========================================================================
+   DATABASE STATUS & MONGODB MIGRATION HANDLERS
+   ========================================================================== */
+
+let isMongoMigrating = false;
+
+async function fetchDbStatus() {
+  try {
+    const res = await fetch('/api/db/status');
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    const pill = document.getElementById('dbStatusPill');
+    const pillText = document.getElementById('dbStatusText');
+
+    if (pill && pillText) {
+      if (data.isMongoConnected) {
+        pillText.textContent = `DB: MongoDB`;
+        pill.title = `Connected to MongoDB (${data.mongoDbName || 'gotouch'}) - Manageable via Compass`;
+        pill.style.borderColor = 'rgba(16, 185, 129, 0.5)';
+      } else if (data.isMongoConfigured) {
+        pillText.textContent = 'DB: Mongo (Offline)';
+        pill.title = 'Configured but connection failed; currently in local JSON fallback';
+        pill.style.borderColor = 'rgba(245, 158, 11, 0.5)';
+      } else {
+        pillText.textContent = 'DB: JSON';
+        pill.title = 'Using local flat-file storage (data/files.json)';
+        pill.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+      }
+    }
+
+    // Update modal elements
+    const badge = document.getElementById('dbModalEngineBadge');
+    const uriEl = document.getElementById('dbModalUri');
+    const nameEl = document.getElementById('dbModalName');
+    const countsEl = document.getElementById('dbModalCounts');
+    const btnMigrate = document.getElementById('btnRunMongoMigrate');
+
+    if (badge) {
+      if (data.isMongoConnected) {
+        badge.textContent = 'MongoDB (Active & Connected)';
+        badge.className = 'status-pill live';
+        badge.style.background = '';
+        badge.style.borderColor = '';
+        badge.style.color = '';
+      } else if (data.isMongoConfigured) {
+        badge.textContent = 'Connection Offline (JSON Fallback)';
+        badge.className = 'status-pill dead';
+      } else {
+        badge.textContent = 'Local Flat JSON (data/files.json)';
+        badge.className = 'status-pill';
+        badge.style.background = 'rgba(245, 158, 11, 0.15)';
+        badge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+        badge.style.color = '#fbbf24';
+      }
+    }
+
+    if (uriEl) uriEl.textContent = data.mongoUriMasked || '(Not Configured in .env)';
+    if (nameEl) nameEl.textContent = data.mongoDbName || 'gotouch';
+    if (countsEl) countsEl.textContent = `${data.filesCount || 0} file(s) | ${data.queueCount || 0} queued item(s)`;
+
+    if (btnMigrate) {
+      btnMigrate.disabled = !data.isMongoConnected || isMongoMigrating;
+      if (!data.isMongoConfigured) {
+        btnMigrate.title = 'Please configure MONGODB_URI in .env first';
+      } else if (!data.isMongoConnected) {
+        btnMigrate.title = 'MongoDB server is not reachable';
+      } else {
+        btnMigrate.title = 'Migrate all local JSON records into MongoDB';
+      }
+    }
+
+    return data;
+  } catch (err) {
+    console.error('Error fetching DB status:', err);
+    return null;
+  }
+}
+
+async function openDbModal() {
+  const modal = document.getElementById('dbModal');
+  if (!modal) return;
+
+  modal.classList.remove('hidden');
+  await fetchDbStatus();
+}
+
+function closeDbModal() {
+  const modal = document.getElementById('dbModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function startMongoMigration() {
+  if (isMongoMigrating) return;
+
+  const btnMigrate = document.getElementById('btnRunMongoMigrate');
+  const progressContainer = document.getElementById('dbMigrateProgressContainer');
+  const progressBar = document.getElementById('dbMigrateProgressBar');
+  const statusLabel = document.getElementById('dbMigrateStatusLabel');
+  const percentLabel = document.getElementById('dbMigratePercentLabel');
+
+  isMongoMigrating = true;
+  if (btnMigrate) {
+    btnMigrate.disabled = true;
+    btnMigrate.innerHTML = '<span class="status-dot online pulse-emerald" style="display:inline-block; margin-right:4px;"></span> Migrating...';
+  }
+
+  if (progressContainer) progressContainer.classList.remove('hidden');
+  if (progressBar) progressBar.style.width = '40%';
+  if (statusLabel) statusLabel.textContent = 'Batch upserting records into MongoDB...';
+  if (percentLabel) percentLabel.textContent = 'In Progress';
+
+  try {
+    const res = await fetch('/api/db/migrate-to-mongo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const data = await res.json();
+
+    if (progressBar) progressBar.style.width = '100%';
+    if (percentLabel) percentLabel.textContent = '100%';
+
+    if (res.ok && data.success) {
+      if (statusLabel) {
+        statusLabel.textContent = `✅ Success: Migrated ${data.filesMigrated} file(s) and ${data.queueMigrated} queue item(s) to "${data.dbName}".`;
+      }
+      showToast(`🚀 MongoDB Migration Complete: ${data.filesMigrated} file(s) successfully upserted into "${data.dbName}"!`, 'success');
+      await fetchFiles();
+      await fetchDbStatus();
+    } else {
+      if (statusLabel) statusLabel.textContent = `❌ Error: ${data.error || 'Migration failed'}`;
+      showToast(data.error || 'MongoDB migration error', 'error');
+    }
+  } catch (err) {
+    if (statusLabel) statusLabel.textContent = `❌ Network error during MongoDB migration`;
+    showToast('Network error during MongoDB migration', 'error');
+  } finally {
+    isMongoMigrating = false;
+    if (btnMigrate) {
+      btnMigrate.disabled = false;
+      btnMigrate.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">rocket_launch</span> Migrate JSON to MongoDB';
+    }
+    await fetchDbStatus();
+  }
+}
+
+/* ==========================================================================
+   CONNECTIVITY TEST HANDLERS (S3 & MONGODB)
+   ========================================================================== */
+
+async function testS3Conn() {
+  const btn = document.getElementById('btnTestS3');
+  const resultBox = document.getElementById('s3TestResult');
+  if (!resultBox) return;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="status-dot online pulse-emerald" style="display:inline-block; margin-right:4px;"></span> Testing...';
+  }
+
+  resultBox.className = '';
+  resultBox.style.display = 'block';
+  resultBox.style.background = 'rgba(56, 189, 248, 0.1)';
+  resultBox.style.border = '1px solid rgba(56, 189, 248, 0.3)';
+  resultBox.style.color = '#38bdf8';
+  resultBox.textContent = '🔄 Testing S3 connection and bucket access...';
+
+  try {
+    const res = await fetch('/api/s3/test', { method: 'POST' });
+    const data = await res.json();
+
+    if (data.success) {
+      resultBox.style.background = 'rgba(16, 185, 129, 0.15)';
+      resultBox.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+      resultBox.style.color = '#34d399';
+      resultBox.innerHTML = `✅ <strong>S3 Connected!</strong><br/>Bucket: <code>${data.bucket}</code><br/>Prefix: <code>/${data.folderPrefix || 'aria2c'}</code><br/>Latency: <strong>${data.latencyMs}ms</strong><br/>${data.message}`;
+      showToast('S3 connection test passed!', 'success');
+    } else {
+      resultBox.style.background = 'rgba(244, 63, 94, 0.15)';
+      resultBox.style.border = '1px solid rgba(244, 63, 94, 0.4)';
+      resultBox.style.color = '#f87171';
+      resultBox.innerHTML = `❌ <strong>S3 Connection Failed:</strong><br/>${data.error || ''}: ${data.message || ''}<br/><small style="color:#cbd5e1;">${data.details || ''}</small>`;
+      showToast('S3 connection test failed', 'error');
+    }
+  } catch (err) {
+    resultBox.style.background = 'rgba(244, 63, 94, 0.15)';
+    resultBox.style.border = '1px solid rgba(244, 63, 94, 0.4)';
+    resultBox.style.color = '#f87171';
+    resultBox.textContent = `❌ Network Error: ${err.message}`;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle; margin-right: 2px;">bolt</span> Test S3 Connection';
+    }
+    await fetchS3Status();
+  }
+}
+
+async function testMongoConn() {
+  const btn = document.getElementById('btnTestMongo');
+  const resultBox = document.getElementById('dbTestResult');
+  if (!resultBox) return;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="status-dot online pulse-emerald" style="display:inline-block; margin-right:4px;"></span> Testing...';
+  }
+
+  resultBox.className = '';
+  resultBox.style.display = 'block';
+  resultBox.style.background = 'rgba(16, 185, 129, 0.1)';
+  resultBox.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+  resultBox.style.color = '#34d399';
+  resultBox.textContent = '🔄 Testing MongoDB connection and ping latency...';
+
+  try {
+    const res = await fetch('/api/db/test', { method: 'POST' });
+    const data = await res.json();
+
+    if (data.success) {
+      resultBox.style.background = 'rgba(16, 185, 129, 0.15)';
+      resultBox.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+      resultBox.style.color = '#34d399';
+      resultBox.innerHTML = `✅ <strong>MongoDB Connected!</strong><br/>Database: <code>${data.dbName}</code><br/>URI: <code>${data.uriMasked}</code><br/>Latency: <strong>${data.latencyMs}ms</strong><br/>${data.message}`;
+      showToast('MongoDB connection test passed!', 'success');
+    } else {
+      resultBox.style.background = 'rgba(244, 63, 94, 0.15)';
+      resultBox.style.border = '1px solid rgba(244, 63, 94, 0.4)';
+      resultBox.style.color = '#f87171';
+      resultBox.innerHTML = `❌ <strong>MongoDB Connection Failed:</strong><br/>${data.error || ''}: ${data.message || ''}<br/><small style="color:#cbd5e1;">${data.details || ''}</small>`;
+      showToast('MongoDB connection test failed', 'error');
+    }
+  } catch (err) {
+    resultBox.style.background = 'rgba(244, 63, 94, 0.15)';
+    resultBox.style.border = '1px solid rgba(244, 63, 94, 0.4)';
+    resultBox.style.color = '#f87171';
+    resultBox.textContent = `❌ Network Error: ${err.message}`;
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle; margin-right: 2px;">bolt</span> Test MongoDB Connection';
+    }
+    await fetchDbStatus();
+  }
+}
+

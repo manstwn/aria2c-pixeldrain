@@ -9,6 +9,8 @@ const auth = require('./src/auth');
 const aria2 = require('./src/aria2');
 const ytdlp = require('./src/ytdlp');
 const touchManager = require('./src/touchManager');
+const s3Storage = require('./src/s3Storage');
+const mongoClient = require('./src/mongoClient');
 const logger = require('./src/logger');
 
 const app = express();
@@ -159,8 +161,36 @@ app.get('/api/stream', (req, res) => {
    PROTECTED API ROUTES (Require PIN Authentication)
    ========================================================================== */
 
-// Protected static route for generated image thumbnails (requires valid PIN auth)
-app.use('/data/image', auth.requireAuth, express.static(path.join(__dirname, 'data/image')));
+// Protected masked image proxy for generated thumbnails (checks local disk first, else streams from S3)
+app.get('/data/image/:filename', auth.requireAuth, async (req, res) => {
+  try {
+    const filename = path.basename(req.params.filename);
+    const localPath = path.join(__dirname, 'data/image', filename);
+
+    // 1. Check local disk first (for unmigrated local images or offline dev)
+    if (fs.existsSync(localPath)) {
+      return res.sendFile(localPath);
+    }
+
+    // 2. Stream directly from S3 behind server proxy (100% masked, no presigned URLs exposed)
+    const s3Object = await s3Storage.getImageStreamFromS3(filename);
+    if (s3Object && s3Object.stream) {
+      res.setHeader('Content-Type', s3Object.contentType || 'image/jpeg');
+      if (s3Object.contentLength) {
+        res.setHeader('Content-Length', s3Object.contentLength);
+      }
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return s3Object.stream.pipe(res);
+    }
+
+    return res.status(404).json({ error: 'Image not found on local disk or S3 storage.' });
+  } catch (err) {
+    console.error('[Image Proxy Error]', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to retrieve image.' });
+    }
+  }
+});
 
 // Download Orchestration Routes
 app.get('/api/downloads', auth.requireAuth, async (req, res) => {
@@ -361,9 +391,16 @@ app.post('/api/files/touch-all', auth.requireAuth, async (req, res) => {
   }
 });
 
-app.delete('/api/files/:id', auth.requireAuth, (req, res) => {
+app.delete('/api/files/:id', auth.requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    const file = db.getFileById(id);
+    if (file) {
+      // Also delete thumbnails from S3 if configured
+      try {
+        await s3Storage.deleteFileThumbnailsFromS3(file);
+      } catch (e) {}
+    }
     const deleted = db.deleteFile(id);
     if (deleted) {
       res.json({ success: true, message: 'Record deleted from ledger.' });
@@ -372,6 +409,86 @@ app.delete('/api/files/:id', auth.requireAuth, (req, res) => {
     }
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+/* ==========================================================================
+   S3 IMAGE STORAGE & MIGRATION ENDPOINTS
+   ========================================================================== */
+
+app.get('/api/s3/status', auth.requireAuth, (req, res) => {
+  try {
+    const status = s3Storage.getS3Status();
+    res.json({ success: true, ...status });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+let isS3SyncRunning = false;
+
+app.post('/api/s3/sync-images', auth.requireAuth, async (req, res) => {
+  if (isS3SyncRunning) {
+    return res.status(409).json({ error: 'S3 image migration is already running.' });
+  }
+
+  try {
+    isS3SyncRunning = true;
+    const result = await s3Storage.syncAllLocalImagesToS3();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    isS3SyncRunning = false;
+  }
+});
+
+app.post('/api/s3/test', auth.requireAuth, async (req, res) => {
+  try {
+    const result = await s3Storage.testS3Connection();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.name, message: err.message });
+  }
+});
+
+/* ==========================================================================
+   DATABASE STATUS & MONGODB MIGRATION ENDPOINTS
+   ========================================================================== */
+
+app.get('/api/db/status', auth.requireAuth, (req, res) => {
+  try {
+    const status = db.getDbStatus();
+    res.json({ success: true, ...status });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/db/test', auth.requireAuth, async (req, res) => {
+  try {
+    const result = await mongoClient.testMongoConnection();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.name, message: err.message });
+  }
+});
+
+let isMongoMigrating = false;
+
+app.post('/api/db/migrate-to-mongo', auth.requireAuth, async (req, res) => {
+  if (isMongoMigrating) {
+    return res.status(409).json({ error: 'MongoDB migration is already in progress.' });
+  }
+
+  try {
+    isMongoMigrating = true;
+    const result = await db.migrateJsonToMongo();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  } finally {
+    isMongoMigrating = false;
   }
 });
 
@@ -488,11 +605,14 @@ app.get('*', (req, res) => {
 
 
 // Start Background Services & Server
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`=======================================================`);
   console.log(`  GoTouch Manager Server running on http://localhost:${PORT}`);
   console.log(`  Target Audience: Single-user / Self-hosted Admin`);
   console.log(`=======================================================`);
+
+  // Initialize Database Engine (MongoDB with local JSON fallback)
+  await db.initDbEngine();
 
   // Initialize Background Daemon Monitors
   aria2.startMonitor();

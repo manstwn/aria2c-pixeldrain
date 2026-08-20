@@ -136,6 +136,41 @@ function extractVideoFramesSinglePass(filePath, durationSeconds, fileId) {
   });
 }
 
+const s3Client = require('./s3Client');
+const s3Storage = require('./s3Storage');
+
+/**
+ * Helper to upload a list of generated local image paths to S3 and clean up local files
+ * @param {Array<string>} localImageFilenames Array of filenames (e.g. ['gt_...-image-1.jpg'])
+ * @returns {Promise<Array<string>>} Array of web URLs (e.g. ['/data/image/gt_...-image-1.jpg'])
+ */
+async function processAndSaveThumbnails(localImageFilenames) {
+  const isS3 = s3Client.isS3Configured();
+  const results = [];
+
+  for (const fn of localImageFilenames) {
+    const localPath = path.join(IMAGES_DIR, fn);
+    const webUrl = `/data/image/${fn}`;
+
+    if (!fs.existsSync(localPath)) continue;
+
+    if (isS3) {
+      try {
+        await s3Storage.uploadImageToS3(localPath, fn);
+        try { fs.unlinkSync(localPath); } catch (e) {}
+        results.push(webUrl);
+      } catch (err) {
+        console.warn(`[Thumbnails S3 Warning] Failed to upload ${fn} to S3, keeping local copy:`, err.message);
+        results.push(webUrl);
+      }
+    } else {
+      results.push(webUrl);
+    }
+  }
+
+  return results;
+}
+
 /**
  * Generate thumbnails for image or 15 frame screenshots across video duration
  * @param {string} filePath Absolute path to completed download file on disk
@@ -151,7 +186,6 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
   }
 
   const category = meta.category || 'file';
-  const thumbnails = [];
   let treatAsVideo = false;
 
   // =========================================================================
@@ -168,7 +202,7 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
         const outPath = path.join(IMAGES_DIR, outFilename);
         fs.copyFileSync(filePath, outPath);
         console.log(`[Thumbnails] Saved image thumbnail: ${outFilename}`);
-        return [`/data/image/${outFilename}`];
+        return await processAndSaveThumbnails([outFilename]);
       }
     } catch (err) {
       console.warn(`[Thumbnails Warning] Could not copy image thumbnail:`, err.message);
@@ -194,7 +228,8 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
     const singlePassFrames = await extractVideoFramesSinglePass(filePath, duration, fileId);
     if (singlePassFrames.length === count) {
       console.log(`[Thumbnails] 🚀 Generated all ${singlePassFrames.length}/${count} 480p video frame screenshots for ${fileId}!`);
-      return singlePassFrames;
+      const filenames = singlePassFrames.map(p => path.basename(p));
+      return await processAndSaveThumbnails(filenames);
     }
 
     // Clean up partial single-pass files if fewer than 15 images were generated
@@ -218,23 +253,25 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
       tasks.push({ i, targetTime, outFilename, outPath });
     }
 
+    const generatedFilenames = [];
+
     // Strict sequential execution: 1 process at a time with CPU breath delay
     for (const task of tasks) {
       const success = await extractVideoFrame(filePath, task.targetTime, task.outPath);
       if (success) {
-        thumbnails.push(`/data/image/${task.outFilename}`);
+        generatedFilenames.push(task.outFilename);
       }
       await sleep(150); // Give 150ms for CPU & Node event loop to breathe
     }
 
-    thumbnails.sort((a, b) => {
+    generatedFilenames.sort((a, b) => {
       const numA = parseInt((a.match(/-image-(\d+)\.jpg$/) || [])[1] || '0', 10);
       const numB = parseInt((b.match(/-image-(\d+)\.jpg$/) || [])[1] || '0', 10);
       return numA - numB;
     });
 
-    console.log(`[Thumbnails] ✅ Generated ${thumbnails.length}/${count} 480p video frame screenshots for ${fileId}!`);
-    return thumbnails;
+    console.log(`[Thumbnails] ✅ Generated ${generatedFilenames.length}/${count} 480p video frame screenshots for ${fileId}!`);
+    return await processAndSaveThumbnails(generatedFilenames);
   }
 
   return [];
@@ -244,3 +281,4 @@ module.exports = {
   IMAGES_DIR,
   generateThumbnails
 };
+
