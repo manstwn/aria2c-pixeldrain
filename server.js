@@ -614,6 +614,20 @@ app.listen(PORT, '0.0.0.0', async () => {
   // Initialize Database Engine (MongoDB with local JSON fallback)
   await db.initDbEngine();
 
+  // Check S3 Storage Connectivity on startup
+  try {
+    const s3Check = await s3Storage.testS3Connection();
+    if (s3Check.success) {
+      console.log(`[S3 Storage] ✅ Connected successfully to bucket "${s3Check.bucket}" (Prefix: "/${s3Check.folderPrefix || 'aria2c'}") in ${s3Check.latencyMs}ms!`);
+    } else if (process.env.S3_ENDPOINT || process.env.S3_BUCKET) {
+      console.warn(`[S3 Storage] ⚠️ S3 check issue: ${s3Check.message || s3Check.error}. Local images will be used as fallback.`);
+    } else {
+      console.log(`[S3 Storage] ℹ️ S3 is not configured in .env. Storing images on local disk (data/image/).`);
+    }
+  } catch (s3BootErr) {
+    console.warn(`[S3 Storage Warning] S3 startup check error: ${s3BootErr.message}`);
+  }
+
   // Initialize Background Daemon Monitors
   aria2.startMonitor();
   touchManager.initScheduler();
