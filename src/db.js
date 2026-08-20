@@ -99,19 +99,30 @@ async function initDbEngine() {
         const cleanFiles = mongoFiles.map(({ _id, ...doc }) => doc);
         const cleanQueue = mongoQueue.map(({ _id, ...doc }) => doc);
 
+        const localFilesCount = _filesCache.length;
+        const localQueueCount = _queueCache.length;
+
         if (cleanFiles.length > 0 || cleanQueue.length > 0) {
           _filesCache = cleanFiles;
           _queueCache = cleanQueue;
           console.log(`[DB] 📦 Loaded ${cleanFiles.length} file record(s) and ${cleanQueue.length} queue item(s) from MongoDB.`);
-        } else if (_filesCache.length > 0) {
-          // If MongoDB is empty but local JSON has records, offer auto-migration
-          console.log(`[DB] ℹ️ MongoDB is currently empty. ${_filesCache.length} local JSON record(s) available for migration.`);
+
+          // If local JSON has records that are missing in MongoDB, auto-upsert them
+          if (localFilesCount > cleanFiles.length) {
+            console.log(`[DB Auto-Migration] 🔄 Local files.json has ${localFilesCount} records vs ${cleanFiles.length} in MongoDB. Auto-syncing...`);
+            await migrateJsonToMongo();
+          }
+        } else if (localFilesCount > 0 || localQueueCount > 0) {
+          // If MongoDB collection is empty, automatically migrate all local JSON records into MongoDB
+          console.log(`[DB Auto-Migration] 🚀 First-time run: Auto-migrating ${localFilesCount} local file(s) and ${localQueueCount} queue item(s) to MongoDB ("${mongoClient.getMongoDbName()}")...`);
+          await migrateJsonToMongo();
+          console.log(`[DB Auto-Migration] ✅ Auto-migration to MongoDB finished successfully!`);
         }
 
         // Sync memory state to backup JSON
         syncToLocalJson();
       } catch (err) {
-        console.error('[DB Error] Failed to load documents from MongoDB:', err.message);
+        console.error('[DB Error] Failed to load/migrate documents with MongoDB:', err.message);
       }
     }
   }
