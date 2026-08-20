@@ -120,6 +120,7 @@ app.get('/api/stream', (req, res) => {
 
   const sendUpdate = async () => {
     try {
+      await db.refreshFromMongo();
       const downloadsStatus = await aria2.getDownloadsStatus();
       const conn = await aria2.checkConnection();
       const persistentQueue = db.getAllQueue();
@@ -315,9 +316,9 @@ app.post('/api/queue/:gid/unpause', auth.requireAuth, async (req, res) => {
 });
 
 // File Ledger Routes
-app.get('/api/files', auth.requireAuth, (req, res) => {
+app.get('/api/files', auth.requireAuth, async (req, res) => {
   try {
-    const files = db.getAllFiles();
+    const files = await db.getAllFilesAsync(true);
     res.json({ files });
   } catch (err) {
     res.status(500).json({ error: err.message });

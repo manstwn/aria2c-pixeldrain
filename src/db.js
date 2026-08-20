@@ -183,12 +183,64 @@ function generateId() {
   return `gt_${timestamp}_${random}`;
 }
 
+let _lastMongoRefreshTime = 0;
+let _isRefreshingMongo = false;
+
+/**
+ * Live pull latest documents from MongoDB into in-memory cache
+ * @param {boolean} force Force refresh ignoring cache throttle
+ */
+async function refreshFromMongo(force = false) {
+  if (!mongoClient.isMongoConnected()) {
+    return false;
+  }
+
+  const now = Date.now();
+  // Throttle queries to max once per 1000ms unless forced
+  if (!force && (now - _lastMongoRefreshTime < 1000 || _isRefreshingMongo)) {
+    return true;
+  }
+
+  try {
+    _isRefreshingMongo = true;
+    const filesCol = mongoClient.getFilesCollection();
+    const queueCol = mongoClient.getQueueCollection();
+
+    if (!filesCol || !queueCol) return false;
+
+    const mongoFiles = await filesCol.find({}).sort({ created_at: -1 }).toArray();
+    const mongoQueue = await queueCol.find({}).toArray();
+
+    _filesCache = mongoFiles.map(({ _id, ...doc }) => doc);
+    _queueCache = mongoQueue.map(({ _id, ...doc }) => doc);
+    _lastMongoRefreshTime = Date.now();
+
+    // Mirror to backup JSON in background
+    syncToLocalJson();
+    return true;
+  } catch (err) {
+    console.warn('[DB Live Sync Warning] Failed to refresh from MongoDB:', err.message);
+    return false;
+  } finally {
+    _isRefreshingMongo = false;
+  }
+}
+
 // ===========================================================================
 // FILES REPOSITORY METHODS
 // ===========================================================================
 
 function getAllFiles() {
+  // Background live revalidate if more than 3s since last MongoDB fetch
+  if (mongoClient.isMongoConnected() && (Date.now() - _lastMongoRefreshTime > 3000)) {
+    refreshFromMongo().catch(() => {});
+  }
   return _filesCache.map(file => enrichFile({ ...file }));
+}
+
+async function getAllFilesAsync(force = false) {
+  await refreshFromMongo(force);
+  return getAllFiles();
 }
 
 function getFileById(id) {
@@ -493,8 +545,10 @@ module.exports = {
   FILES_JSON_PATH,
   QUEUE_JSON_PATH,
   initDbEngine,
+  refreshFromMongo,
   generateId,
   getAllFiles,
+  getAllFilesAsync,
   getFileById,
   addFile,
   updateFile,
