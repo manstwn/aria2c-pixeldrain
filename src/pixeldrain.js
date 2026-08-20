@@ -17,7 +17,7 @@ const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
  * @param {string} sourceUrl Optional original remote URL
  * @param {string} engine Optional download engine ('ytdlp' or 'aria2')
  */
-function uploadToPixeldrain(filePath, overrideFilename, onProgress = null, sourceUrl = '', engine = 'aria2') {
+function uploadToPixeldrain(filePath, customName = '', onProgress = null, sourceUrl = '', engine = 'aria2') {
   let activeFileStream = null;
   let activeReq = null;
   let isAborted = false;
@@ -29,13 +29,13 @@ function uploadToPixeldrain(filePath, overrideFilename, onProgress = null, sourc
 
     metadata.sanitizeVideoFile(filePath);
 
-    // 1. Generate local DB ID first so upload filename directly reflects file ID
+    // 1. Generate local DB ID first so cloud upload filename strictly follows DB ID
     const recordId = db.generateId();
 
     // 2. Determine file extension
     let ext = path.extname(filePath);
-    if (!ext && overrideFilename) {
-      ext = path.extname(overrideFilename);
+    if (!ext && customName) {
+      ext = path.extname(customName);
     }
     if (!ext && sourceUrl) {
       try {
@@ -58,14 +58,14 @@ function uploadToPixeldrain(filePath, overrideFilename, onProgress = null, sourc
       ext = '.' + ext;
     }
 
-    // 3. Construct ID-based filename (e.g. gt_1784845422811_393.mp4)
+    // 3. Construct ID-based filename strictly for Pixeldrain cloud storage (e.g. gt_1784845422811_393.mp4)
     const pixelFilename = `${recordId}${ext}`;
 
     const token = (process.env.PIXELDRAIN_API_TOKEN || '').trim();
     const stats = fs.statSync(filePath);
     const fileSizeMB = (stats.size / (1024 * 1024)).toFixed(2);
 
-    console.log(`[Pixeldrain] Preparing upload for ${pixelFilename} (${fileSizeMB} MB) [Source/Original: ${overrideFilename || path.basename(filePath)}]...`);
+    console.log(`[Pixeldrain] Preparing upload for ${pixelFilename} (${fileSizeMB} MB) [Custom Title: "${customName || 'None'}", Original: "${path.basename(filePath)}"]...`);
     
     if (!token) {
       throw new Error('PIXELDRAIN_API_TOKEN is required for Pixeldrain uploads.');
@@ -182,10 +182,10 @@ function uploadToPixeldrain(filePath, overrideFilename, onProgress = null, sourc
         } catch (e) {}
       }
 
-      // Preserve user custom display name if provided and different from original & generated ID name
-      let customDisplayName = '';
-      if (overrideFilename && overrideFilename !== originalFilename && overrideFilename !== pixelFilename && overrideFilename !== path.basename(filePath)) {
-        customDisplayName = overrideFilename;
+      // Preserve user custom display name if provided
+      let finalCustomName = (customName && typeof customName === 'string') ? customName.trim() : '';
+      if (finalCustomName === pixelFilename) {
+        finalCustomName = '';
       }
 
       const cat = fileMeta.category || 'file';
@@ -207,7 +207,7 @@ function uploadToPixeldrain(filePath, overrideFilename, onProgress = null, sourc
       const record = db.addFile({
         id: recordId,
         filename: pixelFilename,
-        custom_name: customDisplayName,
+        custom_name: finalCustomName,
         original_filename: originalFilename,
         source_url: sourceUrl || '',
         engine: engine || 'aria2',
@@ -220,7 +220,7 @@ function uploadToPixeldrain(filePath, overrideFilename, onProgress = null, sourc
         thumbnails: thumbs
       });
 
-      console.log(`[Pixeldrain] ✅ Upload successful! ID Filename: ${pixelFilename} | Download URL: ${downloadPage}`);
+      console.log(`[Pixeldrain] ✅ Upload successful! DB Filename: ${pixelFilename} | Custom Name: "${finalCustomName}" | Download URL: ${downloadPage}`);
       return record;
 
     } catch (err) {

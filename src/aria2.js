@@ -329,11 +329,15 @@ async function pollCompletedDownloads() {
 
         const filename = path.basename(filePath);
         const sourceData = taskSourceUrls.get(task.gid);
-        const sourceUrlStr = typeof sourceData === 'string' ? sourceData : (sourceData && sourceData.url ? sourceData.url : '');
-        console.log(`[Aria2] Task ${task.gid} completed downloading (${filename}). Starting serial pipeline (Upload -> Thumbnails -> Cleanup)...`);
+        const queuedItems = db.getAllQueue();
+        const qItem = queuedItems.find(q => q.gid === task.gid);
+        const sourceUrlStr = typeof sourceData === 'string' ? sourceData : (sourceData && sourceData.url ? sourceData.url : (qItem ? qItem.url : ''));
+        const customName = (sourceData && sourceData.filename) || (qItem && qItem.custom_name) || '';
+
+        console.log(`[Aria2] Task ${task.gid} completed downloading (${filename}${customName ? ` | Custom Name: "${customName}"` : ''}). Starting serial pipeline (Upload -> Thumbnails -> Cleanup)...`);
 
         activeUploads.set(task.gid, {
-          filename,
+          filename: customName || filename,
           status: 'UPLOADING',
           error: null,
           uploadProgress: 0,
@@ -342,14 +346,12 @@ async function pollCompletedDownloads() {
           uploadSpeed: 0
         });
 
-        const queuedItems = db.getAllQueue();
-        const qItem = queuedItems.find(q => q.gid === task.gid);
         if (qItem) {
           db.updateQueueItem(qItem.id, { status: 'UPLOADING' });
         }
 
         // Trigger Pixeldrain upload -> thumbnail generation -> metadata -> local file cleanup
-        pixeldrain.uploadToPixeldrain(filePath, filename, (progressData) => {
+        pixeldrain.uploadToPixeldrain(filePath, customName, (progressData) => {
           const current = activeUploads.get(task.gid) || {};
           const newStatus = progressData.status || current.status || 'UPLOADING';
           activeUploads.set(task.gid, {

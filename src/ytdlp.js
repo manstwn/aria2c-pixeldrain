@@ -325,13 +325,14 @@ function startDownload(qItem, onComplete, onError) {
         }
 
         const filename = path.basename(targetFilePath);
-        taskState.filename = filename;
+        const customName = qItem.custom_name ? qItem.custom_name.trim() : '';
+        taskState.filename = customName || filename;
         taskState.filePath = targetFilePath;
 
-        console.log(`[yt-dlp] Download completed successfully: ${targetFilePath}. Starting Pixeldrain upload...`);
+        console.log(`[yt-dlp] Download completed successfully: ${targetFilePath}${customName ? ` | Custom Name: "${customName}"` : ''}. Starting Pixeldrain upload...`);
 
         try {
-          const record = await pixeldrain.uploadToPixeldrain(targetFilePath, filename, (progressData) => {
+          const record = await pixeldrain.uploadToPixeldrain(targetFilePath, customName, (progressData) => {
             Object.assign(taskState, progressData);
           }, qItem.url, 'ytdlp');
 
