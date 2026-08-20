@@ -41,11 +41,21 @@ function isCloudflaredEnabled() {
 }
 
 /**
- * Retrieve the configured Cloudflare Tunnel Token
+ * Retrieve and sanitize the configured Cloudflare Tunnel Token
  */
 function getCloudflaredToken() {
-  return (process.env.CLOUDFLARED_TOKEN || '').trim();
+  let token = (process.env.CLOUDFLARED_TOKEN || '').trim();
+  // Strip surrounding quotes if present
+  token = token.replace(/^['"]+|['"]+$/g, '').trim();
+  // If user pasted 'cloudflared tunnel run --token eyJ...' or 'cloudflared service install eyJ...'
+  if (token.includes(' ')) {
+    const parts = token.split(/\s+/);
+    token = parts[parts.length - 1];
+  }
+  return token;
 }
+
+let lastStderr = '';
 
 /**
  * Start Cloudflare Tunnel background daemon
@@ -66,12 +76,13 @@ function startCloudflared() {
   }
 
   isIntentionallyStopped = false;
+  lastStderr = '';
   const binaryPath = findCloudflaredExecutable();
 
   console.log(`[Cloudflare Tunnel] ⚡ Summoning cloudflared daemon ("${binaryPath}")...`);
 
   try {
-    const args = ['tunnel', 'run', '--token', token];
+    const args = ['tunnel', '--no-autoupdate', 'run', '--token', token];
     tunnelProcess = spawn(binaryPath, args, {
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -83,6 +94,7 @@ function startCloudflared() {
 
     tunnelProcess.stderr.on('data', (data) => {
       const text = data.toString();
+      lastStderr = text.trim();
       handleTunnelOutput(text);
     });
 
@@ -99,11 +111,12 @@ function startCloudflared() {
       isConnected = false;
       tunnelProcess = null;
       if (!isIntentionallyStopped) {
-        console.warn(`[Cloudflare Tunnel] Process exited (code: ${code}, signal: ${signal}). Reconnecting in 5s...`);
+        const errorHint = lastStderr ? ` Details: ${lastStderr.substring(0, 300)}` : '';
+        console.warn(`[Cloudflare Tunnel] Process exited (code: ${code}, signal: ${signal}).${errorHint} Retrying in 8s...`);
         if (restartTimeout) clearTimeout(restartTimeout);
         restartTimeout = setTimeout(() => {
           if (!isIntentionallyStopped) startCloudflared();
-        }, 5000);
+        }, 8000);
       } else {
         console.log(`[Cloudflare Tunnel] Daemon stopped.`);
       }
@@ -128,8 +141,8 @@ function handleTunnelOutput(text) {
         isConnected = true;
         console.log(`[Cloudflare Tunnel] ✅ Registered connection to Cloudflare edge network! Your custom domain is LIVE.`);
       }
-    } else if (line.includes('Cannot determine default origin certificate') || line.includes('error=')) {
-      console.warn(`[Cloudflare Tunnel Warning] ${line}`);
+    } else if (line.includes('Cannot determine default origin certificate') || line.includes('ERR ') || line.includes('error=')) {
+      console.warn(`[Cloudflare Tunnel] ⚠️ ${line}`);
     } else if (line.includes('Quitting') || line.includes('Terminating')) {
       isConnected = false;
     }
