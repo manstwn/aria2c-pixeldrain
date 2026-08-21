@@ -507,69 +507,62 @@ function renderGalleryPage() {
 
 // Automatic Smooth Frame Slideshow on Hover with Dual-Layer Fade Crossfade & Frame Dots
 const hoverSlideshowIntervals = {};
-const preloadedCache = {};
-
-// Lazily preload only the thumbnails for a single specific card (called on hover)
-function preloadCardThumbnails(fileId) {
-  if (preloadedCache[fileId]) return; // already done
-  const file = ledgerFiles.find(f => f.id === fileId);
-  if (!file || !file.thumbnails) return;
-  preloadedCache[fileId] = true;
-  file.thumbnails.forEach(url => {
-    const img = new Image();
-    img.src = url;
-  });
-}
+const hoverStartTimers = {};
 
 function startHoverSlideshow(evt, fileId) {
-  activeHoverFileId = fileId;
+  stopHoverSlideshow(evt, fileId);
+
   const file = ledgerFiles.find(f => f.id === fileId);
   if (!file || !file.thumbnails || file.thumbnails.length <= 1) return;
 
-  // Lazy-load this card's frames only now on first hover
-  preloadCardThumbnails(fileId);
+  // Hover intent delay (180ms) so fast cursor passing doesn't trigger frame downloads
+  hoverStartTimers[fileId] = setTimeout(() => {
+    activeHoverFileId = fileId;
+    let frameIdx = 0;
+    let activeLayer = 'bg';
 
-  stopHoverSlideshow(evt, fileId);
+    hoverSlideshowIntervals[fileId] = setInterval(() => {
+      frameIdx = (frameIdx + 1) % file.thumbnails.length;
+      const nextUrl = file.thumbnails[frameIdx];
+      const layerBg = document.getElementById(`layerBg_${fileId}`);
+      const layerFg = document.getElementById(`layerFg_${fileId}`);
 
-  let frameIdx = 0;
-  let activeLayer = 'bg';
-
-  hoverSlideshowIntervals[fileId] = setInterval(() => {
-    frameIdx = (frameIdx + 1) % file.thumbnails.length;
-    const nextUrl = file.thumbnails[frameIdx];
-    const layerBg = document.getElementById(`layerBg_${fileId}`);
-    const layerFg = document.getElementById(`layerFg_${fileId}`);
-
-    if (layerBg && layerFg && nextUrl) {
-      if (activeLayer === 'bg') {
-        layerFg.src = nextUrl;
-        layerFg.style.opacity = '1';
-        activeLayer = 'fg';
-      } else {
-        layerBg.src = nextUrl;
-        layerFg.style.opacity = '0';
-        activeLayer = 'bg';
-      }
-    }
-
-    // Light up active frame indicator dot
-    const dotsContainer = document.getElementById(`dots_${fileId}`);
-    if (dotsContainer && dotsContainer.children.length > 0) {
-      Array.from(dotsContainer.children).forEach((dot, idx) => {
-        if (idx === frameIdx) {
-          dot.classList.add('active');
+      if (layerBg && layerFg && nextUrl) {
+        if (activeLayer === 'bg') {
+          layerFg.src = nextUrl;
+          layerFg.style.opacity = '1';
+          activeLayer = 'fg';
         } else {
-          dot.classList.remove('active');
+          layerBg.src = nextUrl;
+          layerFg.style.opacity = '0';
+          activeLayer = 'bg';
         }
-      });
-    }
-  }, 650);
+      }
+
+      // Light up active frame indicator dot
+      const dotsContainer = document.getElementById(`dots_${fileId}`);
+      if (dotsContainer && dotsContainer.children.length > 0) {
+        Array.from(dotsContainer.children).forEach((dot, idx) => {
+          if (idx === frameIdx) {
+            dot.classList.add('active');
+          } else {
+            dot.classList.remove('active');
+          }
+        });
+      }
+    }, 650);
+  }, 180);
 }
 
 function stopHoverSlideshow(evt, fileId) {
   const cardEl = document.getElementById(`card_${fileId}`) || document.getElementById(`coverDiv_${fileId}`);
   if (evt && evt.relatedTarget && cardEl && cardEl.contains(evt.relatedTarget)) {
     return;
+  }
+
+  if (hoverStartTimers[fileId]) {
+    clearTimeout(hoverStartTimers[fileId]);
+    delete hoverStartTimers[fileId];
   }
 
   if (activeHoverFileId === fileId) {
@@ -604,14 +597,13 @@ function stopHoverSlideshow(evt, fileId) {
   }
 }
 
-// Mobile: a touch/drag landing on a card starts its frame cycling (and lazy-loads
-// that card's frames only now). Any previously active card is stopped first so
-// at most one slideshow timer runs at a time. Frames are never loaded on page open.
+// Mobile: a touch/drag landing on a card starts its frame cycling.
+// Any previously active card is stopped first so at most one slideshow timer runs at a time.
 function handleCardTouch(evt, fileId) {
   if (activeHoverFileId && activeHoverFileId !== fileId) {
     stopHoverSlideshow(null, activeHoverFileId);
   }
-  if (activeHoverFileId === fileId) return; // already cycling this card
+  if (activeHoverFileId === fileId) return;
   startHoverSlideshow(null, fileId);
 }
 
@@ -642,9 +634,6 @@ function openGalleryModal(fileId) {
 
   activeGalleryFileId = fileId;
   activeGalleryImages = file.thumbnails;
-
-  // Lazy-load only this card's frames (skipped if already cached from a prior hover)
-  preloadCardThumbnails(fileId);
 
   // Default to selected_thumbnail if present
   const selectedIdx = file.thumbnails.indexOf(file.selected_thumbnail);
@@ -686,7 +675,7 @@ function renderGalleryState() {
   const strip = document.getElementById('galleryThumbStrip');
   strip.innerHTML = activeGalleryImages.map((tUrl, idx) => `
     <div class="gallery-thumb-item ${idx === currentGalleryIndex ? 'active' : ''}" onclick="setGalleryIndex(${idx})">
-      <img src="${tUrl}" alt="Thumb ${idx + 1}" />
+      <img src="${tUrl}" alt="Thumb ${idx + 1}" loading="lazy" decoding="async" />
     </div>
   `).join('');
 }

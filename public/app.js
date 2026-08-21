@@ -1299,7 +1299,7 @@ function renderGalleryState() {
   const strip = document.getElementById('galleryThumbStrip');
   strip.innerHTML = activeGalleryImages.map((tUrl, idx) => `
     <div class="gallery-thumb-item ${idx === currentGalleryIndex ? 'active' : ''}" onclick="setGalleryIndex(${idx})">
-      <img src="${tUrl}" alt="Thumb ${idx + 1}" />
+      <img src="${tUrl}" alt="Thumb ${idx + 1}" loading="lazy" decoding="async" />
     </div>
   `).join('');
 }
@@ -1683,40 +1683,49 @@ async function handleEditFormSubmit(e) {
    ========================================================================== */
 
 const tableHoverIntervals = {};
+const tableHoverTimers = {};
 
 function startTableHoverSlideshow(evt, fileId) {
+  stopTableHoverSlideshow(evt, fileId);
+
   const file = ledgerFiles.find(f => f.id === fileId);
   if (!file || !file.thumbnails || file.thumbnails.length <= 1) return;
 
-  stopTableHoverSlideshow(evt, fileId);
+  // Hover intent delay (180ms) to prevent unwanted requests while scrolling/moving cursor
+  tableHoverTimers[fileId] = setTimeout(() => {
+    let frameIdx = 0;
+    let activeLayer = 'bg';
 
-  let frameIdx = 0;
-  let activeLayer = 'bg';
+    tableHoverIntervals[fileId] = setInterval(() => {
+      frameIdx = (frameIdx + 1) % file.thumbnails.length;
+      const nextUrl = file.thumbnails[frameIdx];
+      const layerBg = document.getElementById(`tableLayerBg_${fileId}`);
+      const layerFg = document.getElementById(`tableLayerFg_${fileId}`);
 
-  tableHoverIntervals[fileId] = setInterval(() => {
-    frameIdx = (frameIdx + 1) % file.thumbnails.length;
-    const nextUrl = file.thumbnails[frameIdx];
-    const layerBg = document.getElementById(`tableLayerBg_${fileId}`);
-    const layerFg = document.getElementById(`tableLayerFg_${fileId}`);
-
-    if (layerBg && layerFg && nextUrl) {
-      if (activeLayer === 'bg') {
-        layerFg.src = nextUrl;
-        layerFg.style.opacity = '1';
-        activeLayer = 'fg';
-      } else {
-        layerBg.src = nextUrl;
-        layerFg.style.opacity = '0';
-        activeLayer = 'bg';
+      if (layerBg && layerFg && nextUrl) {
+        if (activeLayer === 'bg') {
+          layerFg.src = nextUrl;
+          layerFg.style.opacity = '1';
+          activeLayer = 'fg';
+        } else {
+          layerBg.src = nextUrl;
+          layerFg.style.opacity = '0';
+          activeLayer = 'bg';
+        }
       }
-    }
-  }, 650);
+    }, 650);
+  }, 180);
 }
 
 function stopTableHoverSlideshow(evt, fileId) {
   const rowEl = document.getElementById(`tableRow_${fileId}`);
   if (evt && evt.relatedTarget && rowEl && rowEl.contains(evt.relatedTarget)) {
     return;
+  }
+
+  if (tableHoverTimers[fileId]) {
+    clearTimeout(tableHoverTimers[fileId]);
+    delete tableHoverTimers[fileId];
   }
 
   if (tableHoverIntervals[fileId]) {
