@@ -568,7 +568,7 @@ app.get('/api/video/:id', (req, res) => {
   const token = req.cookies?.gotouch_token || req.query.token || (req.headers.authorization && req.headers.authorization.split(' ')[1]);
   const decoded = auth.verifyToken(token);
 
-  if (!decoded) {
+  if (!decoded && !auth.verifyPin(req.query.pin || '')) {
     return res.status(401).json({ error: 'Unauthorized', message: 'PIN authentication required.' });
   }
 
