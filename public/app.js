@@ -736,36 +736,6 @@ async function fetchFiles() {
   }
 }
 
-let isCheckingPlayable = false;
-
-async function checkAllPlayable() {
-  if (isCheckingPlayable) return;
-  isCheckingPlayable = true;
-  const btn = document.getElementById('btnCheckPlayable');
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px;">hourglass_top</span> Checking...';
-  }
-  try {
-    const res = await fetch('/api/files/check-playability', { method: 'POST' });
-    const data = await res.json();
-    if (res.ok && data.success) {
-      showToast(`✅ Check complete: ${data.playable} playable, ${data.broken} broken (${data.checked} videos checked)`, data.broken > 0 ? 'info' : 'success');
-      fetchFiles();
-    } else {
-      showToast(data.error || 'Playability check failed', 'error');
-    }
-  } catch (err) {
-    showToast('Error running playability check', 'error');
-  } finally {
-    isCheckingPlayable = false;
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px;">play_circle</span> Check Playable';
-    }
-  }
-}
-
 let currentPage = 1;
 let pageSize = parseInt(localStorage.getItem('ledger_page_size') || '10', 10);
 let activeTagFilter = 'ALL';
