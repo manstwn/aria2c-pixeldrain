@@ -152,13 +152,31 @@
                 <span>yt-dlp (Video / HLS Stream)</span>
               </label>
             </div>
-            <div class="input-group">
-              <input type="url" id="downloadUrlInput" class="glow-input" placeholder="Enter source URL (https://... or magnet:...)" required>
-              <input type="text" id="customFilenameInput" class="glow-input" placeholder="Optional filename (e.g. video.mp4)">
-              <button type="submit" class="btn-submit glow-blue" id="btnSubmitDownload">
-                <span class="material-symbols-outlined">rocket_launch</span>
-                Execute
-              </button>
+            <div class="download-form-fields">
+              <div class="field-group">
+                <label class="field-label" for="downloadUrlInput">
+                  <span class="material-symbols-outlined" style="font-size: 14px;">link</span>
+                  Source URL
+                </label>
+                <input type="url" id="downloadUrlInput" class="glow-input" placeholder="Enter source URL (https://... or magnet:...)" required>
+              </div>
+              <div class="field-group field-group-row">
+                <div class="field-group" style="flex: 1;">
+                  <label class="field-label" for="customFilenameInput">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">badge</span>
+                    Filename <span class="field-label-optional">(optional)</span>
+                  </label>
+                  <input type="text" id="customFilenameInput" class="glow-input" placeholder="e.g. video.mp4">
+                </div>
+                <button type="button" class="btn-submit btn-submit-batch" id="btnBatchDownload" onclick="openBatchModal()">
+                  <span class="material-symbols-outlined">playlist_add</span>
+                  Batch
+                </button>
+                <button type="submit" class="btn-submit glow-blue" id="btnSubmitDownload">
+                  <span class="material-symbols-outlined">rocket_launch</span>
+                  Execute
+                </button>
+              </div>
             </div>
           </form>
 
@@ -493,6 +511,51 @@
     </div>
     <div id="quickTagList" style="display: flex; flex-direction: column; gap: 2px; padding: 6px; max-height: 180px; overflow-y: auto;">
       <!-- Available tags listed here -->
+    </div>
+  </div>
+
+  <!-- BATCH DOWNLOAD MODAL -->
+  <div id="batchModal" class="auth-overlay hidden" onclick="if(event.target === this) closeBatchModal()">
+    <div class="auth-card glass-panel" style="max-width: 620px; width: 95vw; text-align: left; padding: 24px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span class="material-symbols-outlined" style="color: #38bdf8; font-size: 26px;">playlist_add</span>
+          <div>
+            <h3 style="font-size: 1.1rem; font-weight: 700; color: #fff; margin: 0;">Batch Download</h3>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin: 2px 0 0 0;">Format: 2 lines per item — line 1 = URL, line 2 = filename</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeBatchModal()">&times;</button>
+      </div>
+
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; margin-top: 14px;">
+        <div class="engine-selector" style="margin: 0;">
+          <label class="engine-pill active" id="batchEnginePillAria2" onclick="selectBatchEngine('aria2')">
+            <span class="material-symbols-outlined" style="font-size: 16px;">bolt</span>
+            <span>Aria2c (Multi-Conn File)</span>
+          </label>
+          <label class="engine-pill" id="batchEnginePillYtdlp" onclick="selectBatchEngine('ytdlp')">
+            <span class="material-symbols-outlined" style="font-size: 16px;">movie</span>
+            <span>yt-dlp (Video / HLS Stream)</span>
+          </label>
+        </div>
+
+        <div>
+          <label for="batchTextarea" style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; display: block;">
+            Batch Input <span style="text-transform: none; font-weight: 500; opacity: 0.7;">(URL newline filename)</span>
+          </label>
+          <textarea id="batchTextarea" class="batch-textarea" rows="12" oninput="updateBatchParseInfo()" placeholder="https://example.com/file1.mp4&#10;my video 1.mp4&#10;https://example.com/file2.zip&#10;archive 2.zip"></textarea>
+          <div id="batchParseInfo" class="batch-parse-info" style="margin-top: 6px; font-size: 0.8rem; color: var(--text-muted);"></div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button type="button" class="btn-table-action" onclick="closeBatchModal()">Cancel</button>
+          <button type="button" id="btnRunBatch" class="btn-table-action primary" onclick="runBatchDownload()" style="background: linear-gradient(135deg, #0284c7, #007aff); color: #fff; font-weight: 700; padding: 8px 18px;">
+            <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle; margin-right: 4px;">playlist_add</span>
+            Queue All
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 

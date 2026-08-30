@@ -212,6 +212,95 @@ function selectEngine(engine) {
   }
 }
 
+let batchEngine = 'aria2';
+
+function selectBatchEngine(engine) {
+  batchEngine = engine;
+  const aria2Pill = document.getElementById('batchEnginePillAria2');
+  const ytdlpPill = document.getElementById('batchEnginePillYtdlp');
+  if (aria2Pill && ytdlpPill) {
+    aria2Pill.classList.toggle('active', engine === 'aria2');
+    ytdlpPill.classList.toggle('active', engine === 'ytdlp');
+  }
+  updateBatchParseInfo();
+}
+
+function parseBatchInput(raw) {
+  const lines = raw.split(/\r?\n/).map(l => l.trim());
+  const items = [];
+  for (let i = 0; i < lines.length; i += 2) {
+    const url = lines[i] || '';
+    if (!url) continue;
+    items.push({ url, filename: (lines[i + 1] || '').replace(/^"|"$/g, '') });
+  }
+  return items;
+}
+
+function updateBatchParseInfo() {
+  const ta = document.getElementById('batchTextarea');
+  const info = document.getElementById('batchParseInfo');
+  if (!ta || !info) return;
+  const items = parseBatchInput(ta.value);
+  const lines = ta.value.split(/\r?\n/).map(l => l.trim()).filter(l => l.length);
+  if (lines.length % 2 !== 0) {
+    info.className = 'batch-parse-info err';
+    info.textContent = `⚠ Odd line count — last URL missing filename. Parsed ${items.length} complete item(s).`;
+  } else {
+    info.className = 'batch-parse-info ok';
+    info.textContent = `${items.length} item(s) ready • Engine: ${batchEngine === 'ytdlp' ? 'yt-dlp' : 'Aria2c'}`;
+  }
+}
+
+function openBatchModal() {
+  document.getElementById('batchModal').classList.remove('hidden');
+  updateBatchParseInfo();
+}
+
+function closeBatchModal() {
+  document.getElementById('batchModal').classList.add('hidden');
+}
+
+async function runBatchDownload() {
+  const ta = document.getElementById('batchTextarea');
+  const btn = document.getElementById('btnRunBatch');
+  const items = parseBatchInput(ta ? ta.value : '');
+  if (items.length === 0) {
+    showToast('No valid items in batch input', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  const original = btn.innerHTML;
+  btn.innerHTML = `Submitting ${items.length}...`;
+
+  let okCount = 0;
+  let failCount = 0;
+  for (const item of items) {
+    try {
+      const res = await fetch('/api/downloads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: item.url, filename: item.filename, engine: batchEngine })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) okCount++;
+      else failCount++;
+    } catch (err) {
+      failCount++;
+    }
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = original;
+  showToast(`Batch done: ${okCount} queued, ${failCount} failed`, okCount > 0 ? 'success' : 'error');
+  if (okCount > 0) {
+    ta.value = '';
+    updateBatchParseInfo();
+    closeBatchModal();
+    fetchDownloads();
+  }
+}
+
 async function handleDownloadSubmit(event) {
   event.preventDefault();
   const inputUrl = document.getElementById('downloadUrlInput');
