@@ -42,6 +42,7 @@ function showDashboard() {
   fetchFiles();
   fetchDbStatus();
   fetchS3Status();
+  fetchFailedLog();
   connectSSE();
 }
 
@@ -93,6 +94,7 @@ function connectSSE() {
         if (dHash !== _lastDownloadsHash) {
           _lastDownloadsHash = dHash;
           renderActiveDownloads(data.downloads);
+          fetchFailedLog();
         }
       }
 
@@ -371,10 +373,88 @@ async function fetchDownloads() {
     }
 
     renderActiveDownloads(data.downloads || []);
+    fetchFailedLog();
   } catch (err) {
     console.error('Error fetching downloads:', err);
   } finally {
     isFetchingDownloads = false;
+  }
+}
+
+let isFetchingFailedLog = false;
+let _lastFailedLogFetch = 0;
+
+async function fetchFailedLog() {
+  const now = Date.now();
+  if (isFetchingFailedLog || now - _lastFailedLogFetch < 3000) return;
+  isFetchingFailedLog = true;
+  _lastFailedLogFetch = now;
+  try {
+    const res = await fetch('/api/download-log');
+    if (res.status === 401) {
+      showLogin();
+      return;
+    }
+    const data = await res.json();
+    renderFailedLog(data.log || []);
+  } catch (err) {
+    console.error('Error fetching failed log:', err);
+  } finally {
+    isFetchingFailedLog = false;
+  }
+}
+
+function renderFailedLog(log) {
+  const countEl = document.getElementById('failedLogCount');
+  const section = document.getElementById('failedLogSection');
+  const list = document.getElementById('failedLogList');
+  const empty = document.getElementById('failedLogEmpty');
+
+  if (countEl) countEl.textContent = log.length;
+  if (section) section.style.display = (log.length > 0 && failedLogVisible) ? 'block' : 'none';
+
+  if (!list || !empty) return;
+  if (!log || log.length === 0) {
+    list.innerHTML = '';
+    if (empty) empty.style.display = 'flex';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  list.innerHTML = log.map(entry => `
+    <div class="queue-item-card">
+      <div class="queue-item-title" title="${escapeHtml(entry.filename || entry.url || 'Unknown')}">${escapeHtml(entry.filename || entry.url || 'Unknown')}</div>
+      <div class="queue-item-meta">
+        <span class="tech-tag" style="font-size: 0.7rem; padding: 2px 6px; background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3);">❌ FAILED</span>
+        <span class="tech-tag" style="font-size: 0.65rem; padding: 2px 6px; background: rgba(100,116,139,0.15); color: #94a3b8;">${formatRelativeTime(entry.failed_at)}</span>
+      </div>
+      ${entry.error ? `<div style="margin-top: 4px; font-size: 0.75rem; color: #f87171;">⚠️ ${escapeHtml(entry.error)}</div>` : ''}
+      ${entry.url ? `<div style="margin-top: 4px; font-size: 0.7rem; color: var(--text-muted); word-break: break-all;">${escapeHtml(entry.url)}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+let failedLogVisible = false;
+
+function toggleFailedLog() {
+  failedLogVisible = !failedLogVisible;
+  const section = document.getElementById('failedLogSection');
+  if (section) section.style.display = failedLogVisible ? 'block' : 'none';
+}
+
+async function clearFailedLog() {
+  if (!confirm('Clear the failed download log?')) return;
+  try {
+    const res = await fetch('/api/download-log', { method: 'DELETE' });
+    if (res.ok) {
+      showToast('Download log cleared.', 'info');
+      failedLogVisible = true;
+      fetchFailedLog();
+    } else {
+      showToast('Failed to clear log.', 'error');
+    }
+  } catch (err) {
+    showToast('Network error while clearing log', 'error');
   }
 }
 
@@ -656,6 +736,36 @@ async function fetchFiles() {
   }
 }
 
+let isCheckingPlayable = false;
+
+async function checkAllPlayable() {
+  if (isCheckingPlayable) return;
+  isCheckingPlayable = true;
+  const btn = document.getElementById('btnCheckPlayable');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px;">hourglass_top</span> Checking...';
+  }
+  try {
+    const res = await fetch('/api/files/check-playability', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      showToast(`✅ Check complete: ${data.playable} playable, ${data.broken} broken (${data.checked} videos checked)`, data.broken > 0 ? 'info' : 'success');
+      fetchFiles();
+    } else {
+      showToast(data.error || 'Playability check failed', 'error');
+    }
+  } catch (err) {
+    showToast('Error running playability check', 'error');
+  } finally {
+    isCheckingPlayable = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px;">play_circle</span> Check Playable';
+    }
+  }
+}
+
 let currentPage = 1;
 let pageSize = parseInt(localStorage.getItem('ledger_page_size') || '10', 10);
 let activeTagFilter = 'ALL';
@@ -846,6 +956,14 @@ function renderLedger() {
         ? `<span class="status-badge live"><span class="dot-pulse"></span> LIVE</span>`
         : `<span class="status-badge dead">DEAD</span>`;
 
+      const playBadgeHTML = file.pixeldrain_id
+        ? (file.playable === true
+          ? `<span class="status-badge live" style="background: rgba(16,185,129,0.15); color: #34d399; border-color: rgba(16,185,129,0.3);" title="Verified playable ${file.playable_checked_at ? formatRelativeTime(file.playable_checked_at) : ''}">✅ PLAYABLE</span>`
+          : file.playable === false
+            ? `<span class="status-badge dead" style="background: rgba(239,68,68,0.15); color: #f87171; border-color: rgba(239,68,68,0.3);" title="${escapeHtml(file.playable_error || 'Not playable')}">❌ NOT PLAYABLE</span>`
+            : `<span class="status-badge" style="background: rgba(148,163,184,0.15); color: #94a3b8; border-color: rgba(148,163,184,0.3);">⏳ UNCHECKED</span>`)
+        : '';
+
       const lastTouchedRel = formatRelativeTime(file.last_touched);
       const createdAtRel = formatRelativeTime(file.created_at);
       const lastTouchedUTC = formatUTC(file.last_touched);
@@ -938,6 +1056,7 @@ function renderLedger() {
           <td class="status-cell">
             <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start;">
               ${statusBadge}
+              ${playBadgeHTML}
               <div style="font-size: 0.775rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px;" title="UTC: ${escapeHtml(lastTouchedUTC)}">
                 Touched: ${escapeHtml(lastTouchedRel)}
               </div>
@@ -1001,6 +1120,11 @@ function renderLedger() {
       }
       if (file.source_url) {
         metaPills.push(`<a href="${escapeHtml(file.source_url)}" target="_blank" rel="noopener" class="meta-pill source" title="${escapeHtml(file.source_url)}">🌐 Source</a>`);
+      }
+      if (file.pixeldrain_id) {
+        if (file.playable === true) metaPills.push(`<span class="meta-pill" style="background: rgba(16,185,129,0.15); color: #34d399;">✅ Playable</span>`);
+        else if (file.playable === false) metaPills.push(`<span class="meta-pill" style="background: rgba(239,68,68,0.15); color: #f87171;" title="${escapeHtml(file.playable_error || 'Not playable')}">❌ Not Playable</span>`);
+        else metaPills.push(`<span class="meta-pill" style="color: #94a3b8;">⏳ Unchecked</span>`);
       }
 
       const displayName = file.custom_name || file.original_filename || file.filename;

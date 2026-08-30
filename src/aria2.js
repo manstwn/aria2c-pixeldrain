@@ -372,10 +372,14 @@ async function pollCompletedDownloads() {
             // ONLY NOW launch the next queue item after disk cleanup!
             processNextQueueItem();
           })
-          .catch(err => {
+          .catch(async err => {
             console.error(`[Aria2 Pipeline] ❌ Upload/Processing failed for task ${task.gid}:`, err.message);
             activeUploads.set(task.gid, { filename, status: 'UPLOAD_FAILED', error: err.message });
+            if (qItem) {
+              db.addToDownloadLog({ ...qItem, status: 'FAILED', error: err.message, failed_at: new Date().toISOString() });
+            }
             db.removeFromQueue(task.gid);
+            await cleanUpTaskFiles(task.gid, task);
             activeUploads.delete(task.gid);
             try { rpcCall('aria2.removeDownloadResult', [task.gid]); } catch (e) {}
             processNextQueueItem();
@@ -388,11 +392,13 @@ async function pollCompletedDownloads() {
         const queuedItems = db.getAllQueue();
         const qItem = queuedItems.find(q => q.gid === task.gid);
         if (qItem) {
-          db.updateQueueItem(qItem.id, {
-            status: 'PAUSED',
-            gid: '',
-            error: task.errorMessage || 'Download failed (e.g. invalid URL or network error).'
+          db.addToDownloadLog({
+            ...qItem,
+            status: 'FAILED',
+            error: task.errorMessage || 'Download failed (e.g. invalid URL or network error).',
+            failed_at: new Date().toISOString()
           });
+          db.removeFromQueue(qItem.id);
         }
         
         try {
@@ -480,7 +486,13 @@ async function processNextQueueItem() {
       ytdlp.startDownload(nextItem, () => {
         processNextQueueItem();
       }, (err) => {
-        db.updateQueueItem(nextItem.id, { status: 'PAUSED', error: err.message || 'yt-dlp download failed' });
+        db.addToDownloadLog({
+          ...nextItem,
+          status: 'FAILED',
+          error: err.message || 'yt-dlp download failed',
+          failed_at: new Date().toISOString()
+        });
+        db.removeFromQueue(nextItem.id);
         processNextQueueItem();
       });
     } else {

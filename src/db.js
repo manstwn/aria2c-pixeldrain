@@ -8,10 +8,12 @@ const DATA_DIR = process.env.DATA_DIR || './data';
 const DOWNLOADS_DIR = path.join(DATA_DIR, 'downloads');
 const FILES_JSON_PATH = path.join(DATA_DIR, 'files.json');
 const QUEUE_JSON_PATH = path.join(DATA_DIR, 'queue.json');
+const DOWNLOAD_LOG_JSON_PATH = path.join(DATA_DIR, 'download-log.json');
 
 // In-Memory Cache for ultra-fast, zero-latency synchronous access
 let _filesCache = [];
 let _queueCache = [];
+let _downloadLogCache = [];
 let _isInitialized = false;
 
 /**
@@ -41,6 +43,9 @@ function initStorage() {
   if (!fs.existsSync(QUEUE_JSON_PATH)) {
     fs.writeFileSync(QUEUE_JSON_PATH, JSON.stringify([], null, 2), 'utf8');
   }
+  if (!fs.existsSync(DOWNLOAD_LOG_JSON_PATH)) {
+    fs.writeFileSync(DOWNLOAD_LOG_JSON_PATH, JSON.stringify([], null, 2), 'utf8');
+  }
 }
 
 /**
@@ -63,6 +68,14 @@ function loadFromLocalJson() {
     console.error('[DB] Error reading queue.json:', err.message);
     _queueCache = [];
   }
+
+  try {
+    const rawLog = fs.readFileSync(DOWNLOAD_LOG_JSON_PATH, 'utf8');
+    _downloadLogCache = JSON.parse(rawLog || '[]');
+  } catch (err) {
+    console.error('[DB] Error reading download-log.json:', err.message);
+    _downloadLogCache = [];
+  }
 }
 
 /**
@@ -73,6 +86,7 @@ function syncToLocalJson() {
     initStorage();
     fs.writeFileSync(FILES_JSON_PATH, JSON.stringify(_filesCache, null, 2), 'utf8');
     fs.writeFileSync(QUEUE_JSON_PATH, JSON.stringify(_queueCache, null, 2), 'utf8');
+    fs.writeFileSync(DOWNLOAD_LOG_JSON_PATH, JSON.stringify(_downloadLogCache, null, 2), 'utf8');
   } catch (err) {
     console.error('[DB] Error syncing to local JSON files:', err.message);
   }
@@ -91,13 +105,16 @@ async function initDbEngine() {
       try {
         const filesCol = mongoClient.getFilesCollection();
         const queueCol = mongoClient.getQueueCollection();
+        const downloadLogCol = mongoClient.getDownloadLogCollection();
 
         const mongoFiles = await filesCol.find({}).sort({ created_at: -1 }).toArray();
         const mongoQueue = await queueCol.find({}).toArray();
+        const mongoLog = await downloadLogCol.find({}).sort({ created_at: -1 }).toArray();
 
         // Strip MongoDB internal _id for clean representation
         const cleanFiles = mongoFiles.map(({ _id, ...doc }) => doc);
         const cleanQueue = mongoQueue.map(({ _id, ...doc }) => doc);
+        const cleanLog = mongoLog.map(({ _id, ...doc }) => doc);
 
         const localFilesCount = _filesCache.length;
         const localQueueCount = _queueCache.length;
@@ -105,6 +122,7 @@ async function initDbEngine() {
         if (cleanFiles.length > 0 || cleanQueue.length > 0) {
           _filesCache = cleanFiles;
           _queueCache = cleanQueue;
+          _downloadLogCache = cleanLog;
           console.log(`[DB] 📦 Loaded ${cleanFiles.length} file record(s) and ${cleanQueue.length} queue item(s) from MongoDB.`);
 
           // If local JSON has records that are missing in MongoDB, auto-upsert them
@@ -205,14 +223,17 @@ async function refreshFromMongo(force = false) {
     _isRefreshingMongo = true;
     const filesCol = mongoClient.getFilesCollection();
     const queueCol = mongoClient.getQueueCollection();
+    const downloadLogCol = mongoClient.getDownloadLogCollection();
 
     if (!filesCol || !queueCol) return false;
 
     const mongoFiles = await filesCol.find({}).sort({ created_at: -1 }).toArray();
     const mongoQueue = await queueCol.find({}).toArray();
+    const mongoLog = await downloadLogCol.find({}).sort({ created_at: -1 }).toArray();
 
     _filesCache = mongoFiles.map(({ _id, ...doc }) => doc);
     _queueCache = mongoQueue.map(({ _id, ...doc }) => doc);
+    _downloadLogCache = mongoLog.map(({ _id, ...doc }) => doc);
     _lastMongoRefreshTime = Date.now();
 
     // Mirror to backup JSON in background
@@ -437,6 +458,62 @@ function clearQueue() {
 }
 
 // ===========================================================================
+// DOWNLOAD LOG REPOSITORY METHODS
+// ===========================================================================
+
+function getAllDownloadLog() {
+  return _downloadLogCache.map(l => ({ ...l }));
+}
+
+function addToDownloadLog(item) {
+  const now = new Date().toISOString();
+  const logEntry = {
+    id: item.id || `dl_${Date.now()}_${Math.floor(100 + Math.random() * 900)}`,
+    url: item.url || '',
+    custom_name: item.custom_name || '',
+    filename: item.filename || item.custom_name || '',
+    engine: item.engine || 'aria2',
+    status: item.status || 'FAILED',
+    error: item.error || 'Download failed',
+    created_at: item.created_at || now,
+    failed_at: item.failed_at || now
+  };
+
+  _downloadLogCache.unshift(logEntry);
+  if (_downloadLogCache.length > 200) {
+    _downloadLogCache = _downloadLogCache.slice(0, 200);
+  }
+  syncToLocalJson();
+
+  if (mongoClient.isMongoConnected()) {
+    const logCol = mongoClient.getDownloadLogCollection();
+    logCol.updateOne(
+      { id: logEntry.id },
+      { $set: { ...logEntry } },
+      { upsert: true }
+    ).catch(err => {
+      console.error(`[MongoDB Download Log Error] Failed to persist ${logEntry.id}:`, err.message);
+    });
+  }
+
+  return { ...logEntry };
+}
+
+function clearDownloadLog() {
+  _downloadLogCache = [];
+  syncToLocalJson();
+
+  if (mongoClient.isMongoConnected()) {
+    const logCol = mongoClient.getDownloadLogCollection();
+    logCol.deleteMany({}).catch(err => {
+      console.error('[MongoDB Download Log Clear Error]', err.message);
+    });
+  }
+
+  return true;
+}
+
+// ===========================================================================
 // MIGRATION & STATUS HELPERS
 // ===========================================================================
 
@@ -455,10 +532,12 @@ async function migrateJsonToMongo() {
 
   const filesCol = mongoClient.getFilesCollection();
   const queueCol = mongoClient.getQueueCollection();
+  const downloadLogCol = mongoClient.getDownloadLogCollection();
 
   // Read latest local JSON records
   let localFiles = [];
   let localQueue = [];
+  let localLog = [];
 
   try {
     if (fs.existsSync(FILES_JSON_PATH)) {
@@ -467,12 +546,16 @@ async function migrateJsonToMongo() {
     if (fs.existsSync(QUEUE_JSON_PATH)) {
       localQueue = JSON.parse(fs.readFileSync(QUEUE_JSON_PATH, 'utf8') || '[]');
     }
+    if (fs.existsSync(DOWNLOAD_LOG_JSON_PATH)) {
+      localLog = JSON.parse(fs.readFileSync(DOWNLOAD_LOG_JSON_PATH, 'utf8') || '[]');
+    }
   } catch (e) {
     throw new Error(`Failed to read local JSON files: ${e.message}`);
   }
 
   let filesMigrated = 0;
   let queueMigrated = 0;
+  let logMigrated = 0;
 
   // Batch upsert files into MongoDB
   if (localFiles.length > 0) {
@@ -500,21 +583,38 @@ async function migrateJsonToMongo() {
     queueMigrated = (resQ.upsertedCount || 0) + (resQ.modifiedCount || 0) + (resQ.matchedCount || 0);
   }
 
+  // Batch upsert download log into MongoDB
+  if (localLog.length > 0) {
+    const logOps = localLog.map(l => ({
+      updateOne: {
+        filter: { id: l.id },
+        update: { $set: l },
+        upsert: true
+      }
+    }));
+    const resL = await downloadLogCol.bulkWrite(logOps);
+    logMigrated = (resL.upsertedCount || 0) + (resL.modifiedCount || 0) + (resL.matchedCount || 0);
+  }
+
   // Reload cache from MongoDB
   const mongoFiles = await filesCol.find({}).sort({ created_at: -1 }).toArray();
   const mongoQueue = await queueCol.find({}).toArray();
+  const mongoLog = await downloadLogCol.find({}).sort({ created_at: -1 }).toArray();
 
   _filesCache = mongoFiles.map(({ _id, ...doc }) => doc);
   _queueCache = mongoQueue.map(({ _id, ...doc }) => doc);
+  _downloadLogCache = mongoLog.map(({ _id, ...doc }) => doc);
 
-  console.log(`[DB Migration] ✅ Migrated ${filesMigrated} file(s) and ${queueMigrated} queue item(s) to MongoDB collection.`);
+  console.log(`[DB Migration] ✅ Migrated ${filesMigrated} file(s), ${queueMigrated} queue item(s) and ${logMigrated} download log entry(ies) to MongoDB collection.`);
 
   return {
     success: true,
     filesMigrated,
     queueMigrated,
+    logMigrated,
     totalFiles: _filesCache.length,
     totalQueue: _queueCache.length,
+    totalDownloadLog: _downloadLogCache.length,
     dbName: mongoClient.getMongoDbName()
   };
 }
@@ -535,7 +635,8 @@ function getDbStatus() {
     filesCount: _filesCache.length,
     queueCount: _queueCache.length,
     jsonFilesPath: FILES_JSON_PATH,
-    jsonQueuePath: QUEUE_JSON_PATH
+    jsonQueuePath: QUEUE_JSON_PATH,
+    downloadLogCount: _downloadLogCache.length
   };
 }
 
@@ -559,6 +660,9 @@ module.exports = {
   updateQueueItem,
   removeFromQueue,
   clearQueue,
+  getAllDownloadLog,
+  addToDownloadLog,
+  clearDownloadLog,
   migrateJsonToMongo,
   getDbStatus
 };

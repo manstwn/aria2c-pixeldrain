@@ -93,6 +93,10 @@ async function connectMongo() {
       await queueCol.createIndex({ id: 1 }, { unique: true });
       await queueCol.createIndex({ gid: 1 });
       await queueCol.createIndex({ status: 1 });
+
+      const downloadLogCol = dbInstance.collection('download-log');
+      await downloadLogCol.createIndex({ id: 1 }, { unique: true });
+      await downloadLogCol.createIndex({ created_at: -1 });
     } catch (idxErr) {
       console.warn('[MongoDB Index Warning]', idxErr.message);
     }
@@ -133,6 +137,14 @@ function getFilesCollection() {
 function getQueueCollection() {
   if (!isMongoConnected()) return null;
   return dbInstance.collection('queue');
+}
+
+/**
+ * Get 'download-log' collection
+ */
+function getDownloadLogCollection() {
+  if (!isMongoConnected()) return null;
+  return dbInstance.collection('download-log');
 }
 
 /**
@@ -214,6 +226,7 @@ module.exports = {
   getDb,
   getFilesCollection,
   getQueueCollection,
+  getDownloadLogCollection,
   isMongoConfigured,
   isMongoConnected,
   getMongoDbName,

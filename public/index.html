@@ -200,6 +200,9 @@
               <h2 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary);">Download Queue</h2>
             </div>
             <span class="status-indicator-pill" id="queueBadge" style="font-size: 0.725rem; font-family: var(--font-mono);">0 Queued</span>
+            <button class="btn-table-action" id="btnToggleFailedLog" onclick="toggleFailedLog()" style="padding: 3px 10px; font-size: 0.75rem;" title="Show/Hide failed download log">
+              ❌ Failed: <span id="failedLogCount" style="font-family: var(--font-mono);">0</span>
+            </button>
           </div>
 
           <!-- Queue Control Action Bar -->
@@ -219,6 +222,24 @@
               <span class="material-symbols-outlined" style="font-size: 18px;">queue</span>
               No tasks waiting in queue
             </span>
+          </div>
+
+          <!-- Failed Download Log (moved out of queue on process failure) -->
+          <div id="failedLogSection" style="margin-top: 14px; border-top: 1px solid var(--glass-stroke); padding-top: 12px; display: none;">
+            <div class="flex-between" style="margin-bottom: 8px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="material-symbols-outlined" style="color: #f87171; font-size: 16px;">report</span>
+                <h3 style="font-size: 0.82rem; font-weight: 700; color: #f87171;">Failed Downloads</h3>
+              </div>
+              <button class="btn-copy-mini" onclick="clearFailedLog()" title="Clear failed download log">🗑️ Clear</button>
+            </div>
+            <div id="failedLogList" class="queue-list-container"></div>
+            <div id="failedLogEmpty" class="empty-state" style="padding: 12px 8px; margin-top: 8px; display: none;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <span class="material-symbols-outlined" style="font-size: 16px;">task_alt</span>
+                No failed downloads
+              </span>
+            </div>
           </div>
         </section>
       </div>
@@ -246,6 +267,10 @@
             <button class="btn-action pulse-btn" onclick="triggerTouchAll()" id="btnTouchAll">
               <span class="material-symbols-outlined" style="font-size: 18px;">bolt</span>
               Touch All LIVE Files
+            </button>
+            <button class="btn-action" onclick="checkAllPlayable()" id="btnCheckPlayable" title="Test every video stream and store playability in DB">
+              <span class="material-symbols-outlined" style="font-size: 18px;">play_circle</span>
+              Check Playable
             </button>
           </div>
         </div>
@@ -716,6 +741,6 @@
   <!-- TOAST NOTIFICATION SYSTEM -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="app.js?v=2.2"></script>
+  <script src="app.js?v=2.4"></script>
 </body>
 </html>

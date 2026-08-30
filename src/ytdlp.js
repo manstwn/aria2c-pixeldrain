@@ -319,6 +319,7 @@ function startDownload(qItem, onComplete, onError) {
           const err = new Error('yt-dlp finished but output video file could not be found on disk.');
           taskState.status = 'ERROR';
           taskState.errorMessage = err.message;
+          wipeTaskDiskFiles(taskState);
           activeTasks.delete(gid);
           if (onError) onError(err);
           return;
@@ -356,6 +357,7 @@ function startDownload(qItem, onComplete, onError) {
           console.error(`[yt-dlp] Upload failed for task ${gid}:`, uploadErr.message);
           taskState.status = 'UPLOAD_FAILED';
           taskState.errorMessage = uploadErr.message;
+          wipeTaskDiskFiles(taskState);
           setTimeout(() => {
             activeTasks.delete(gid);
             if (onError) onError(uploadErr);
@@ -366,10 +368,7 @@ function startDownload(qItem, onComplete, onError) {
         taskState.status = 'ERROR';
         taskState.errorMessage = err.message;
 
-        // Clean up partial downloads if any
-        if (taskState.filePath && fs.existsSync(taskState.filePath)) {
-          try { fs.rmSync(taskState.filePath, { force: true }); } catch (e) {}
-        }
+        wipeTaskDiskFiles(taskState);
 
         setTimeout(() => {
           activeTasks.delete(gid);
@@ -382,6 +381,39 @@ function startDownload(qItem, onComplete, onError) {
     console.error(`[yt-dlp] Exception spawning yt-dlp:`, err.message);
     activeTasks.delete(gid);
     if (onError) onError(err);
+  }
+}
+
+/**
+ * Wipe all disk files belonging to a yt-dlp task (main file + .part/.ytdl partials)
+ */
+function wipeTaskDiskFiles(task) {
+  const targetKeywords = [task.gid];
+  if (task.filePath) {
+    const fn = path.basename(task.filePath);
+    targetKeywords.push(fn);
+    targetKeywords.push(fn.split('.')[0]);
+    if (fs.existsSync(task.filePath)) {
+      try { fs.rmSync(task.filePath, { recursive: true, force: true }); } catch (e) {}
+    }
+  }
+
+  const downloadsDir = path.resolve(db.DOWNLOADS_DIR);
+  if (fs.existsSync(downloadsDir)) {
+    try {
+      const filesInDir = fs.readdirSync(downloadsDir);
+      for (const f of filesInDir) {
+        const fullP = path.join(downloadsDir, f);
+        const isMatch = targetKeywords.some(kw => kw && kw.length > 2 && f.includes(kw));
+
+        if (isMatch) {
+          try {
+            fs.rmSync(fullP, { recursive: true, force: true });
+            console.log(`[yt-dlp Cleanup] Wiped temp download file: ${fullP}`);
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
   }
 }
 
@@ -414,34 +446,7 @@ function removeDownload(gid) {
       try { task.uploadTaskPromise.abort(); } catch (e) {}
     }
 
-    const targetKeywords = [gid];
-    if (task.filePath) {
-      const fn = path.basename(task.filePath);
-      targetKeywords.push(fn);
-      targetKeywords.push(fn.split('.')[0]);
-      if (fs.existsSync(task.filePath)) {
-        try { fs.rmSync(task.filePath, { recursive: true, force: true }); } catch (e) {}
-      }
-    }
-
-    const downloadsDir = path.resolve(db.DOWNLOADS_DIR);
-    if (fs.existsSync(downloadsDir)) {
-      try {
-        const filesInDir = fs.readdirSync(downloadsDir);
-        for (const f of filesInDir) {
-          const fullP = path.join(downloadsDir, f);
-          const isMatch = targetKeywords.some(kw => kw && kw.length > 2 && f.includes(kw));
-
-          if (isMatch) {
-            try {
-              fs.rmSync(fullP, { recursive: true, force: true });
-              console.log(`[yt-dlp Cleanup] Wiped temp download file: ${fullP}`);
-            } catch (e) {}
-          }
-        }
-      } catch (e) {}
-    }
-
+    wipeTaskDiskFiles(task);
     activeTasks.delete(gid);
     console.log(`[yt-dlp Cleanup] Task ${gid} cancelled & disk files wiped.`);
   }

@@ -321,6 +321,17 @@ app.post('/api/queue/:gid/unpause', auth.requireAuth, async (req, res) => {
   }
 });
 
+// Failed download log (items moved out of queue on process failure)
+app.get('/api/download-log', auth.requireAuth, async (req, res) => {
+  await db.refreshFromMongo();
+  res.json({ log: db.getAllDownloadLog() });
+});
+
+app.delete('/api/download-log', auth.requireAuth, (req, res) => {
+  db.clearDownloadLog();
+  res.json({ success: true, message: 'Download log cleared.' });
+});
+
 // File Ledger Routes
 app.get('/api/files', auth.requireAuth, async (req, res) => {
   try {
@@ -415,6 +426,71 @@ app.delete('/api/files/:id', auth.requireAuth, async (req, res) => {
     } else {
       res.status(404).json({ error: 'Record not found.' });
     }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Test whether a pixeldrain video stream is actually playable via the proxy,
+ * mirroring the exact request the watch player makes (Range request + token).
+ */
+async function testVideoPlayability(file) {
+  const axios = require('axios');
+  const targetUrl = `https://pixeldrain.com/api/file/${file.pixeldrain_id}`;
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': '*/*',
+    'Range': 'bytes=0-1023'
+  };
+
+  const pixeldrainToken = (process.env.PIXELDRAIN_API_TOKEN || '').trim();
+  if (pixeldrainToken) {
+    headers['Authorization'] = `Basic ${Buffer.from(`:${pixeldrainToken}`).toString('base64')}`;
+  }
+
+  try {
+    const res = await axios.get(targetUrl, {
+      headers,
+      timeout: 15000,
+      maxRedirects: 5,
+      validateStatus: () => true,
+      responseType: 'stream'
+    });
+    if (res.data && res.data.destroy) res.data.destroy();
+    if (res.status === 200 || res.status === 206) {
+      return { playable: true, error: '' };
+    }
+    return { playable: false, error: `HTTP ${res.status}` };
+  } catch (err) {
+    return { playable: false, error: err.message };
+  }
+}
+
+// Scan every video record and store playability result in the DB
+app.post('/api/files/check-playability', auth.requireAuth, async (req, res) => {
+  try {
+    const files = await db.getAllFilesAsync(true);
+    const videos = files.filter(f => f.pixeldrain_id);
+    let checked = 0;
+    let playable = 0;
+    let broken = 0;
+    const results = [];
+
+    for (const file of videos) {
+      const r = await testVideoPlayability(file);
+      db.updateFile(file.id, {
+        playable: r.playable,
+        playable_error: r.error || '',
+        playable_checked_at: new Date().toISOString()
+      });
+      if (r.playable) playable++;
+      else broken++;
+      checked++;
+      results.push({ id: file.id, filename: file.filename, ...r });
+    }
+
+    res.json({ success: true, checked, playable, broken, results });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
