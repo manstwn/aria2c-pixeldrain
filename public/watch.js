@@ -460,6 +460,52 @@ function copyStreamLink() {
   });
 }
 
+let shareExpiresAt = 0;
+let shareTicker = null;
+
+async function generateShareLink() {
+  if (!currentFileId) return;
+  const btn = document.getElementById('btnGenerateShare');
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/video/${currentFileId}/share`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok && data.secret) {
+      const url = `${window.location.origin}/api/video/${currentFileId}?secret=${data.secret}`;
+      await navigator.clipboard.writeText(url);
+      shareExpiresAt = Date.now() + (data.expiresIn || 3600) * 1000;
+      startShareTicker();
+      showToast('📋 Share link copied! Valid for 1 hour.', 'success');
+    } else {
+      showToast(data.error || 'Failed to generate share link', 'error');
+    }
+  } catch (err) {
+    showToast('Error generating share link', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function startShareTicker() {
+  const el = document.getElementById('shareLinkStatus');
+  if (!el) return;
+  clearInterval(shareTicker);
+  const tick = () => {
+    const remaining = Math.max(0, shareExpiresAt - Date.now());
+    if (remaining <= 0) {
+      el.textContent = 'Share link expired. Generate a new one.';
+      clearInterval(shareTicker);
+      return;
+    }
+    const mins = Math.floor(remaining / 60000);
+    const secs = Math.floor((remaining % 60000) / 1000);
+    el.textContent = `Link expires in ${mins}m ${secs}s`;
+  };
+  tick();
+  shareTicker = setInterval(tick, 1000);
+}
+
 async function deleteCurrentFile() {
   if (!currentFileId || !confirm('Are you sure you want to delete this record from ledger?')) return;
 

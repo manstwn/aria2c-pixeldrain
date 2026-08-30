@@ -35,7 +35,13 @@ app.post('/api/login', (req, res) => {
     return res.status(400).json({ error: 'PIN is required' });
   }
 
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  if (!auth.allowLoginAttempt(ip)) {
+    return res.status(429).json({ error: 'Too many attempts. Try again later.' });
+  }
+
   if (auth.verifyPin(pin)) {
+    auth.resetLoginAttempts(ip);
     const token = auth.generateToken();
     res.cookie('gotouch_token', token, {
       httpOnly: true,
@@ -567,9 +573,10 @@ app.get('/api/video/:id', (req, res) => {
 
   const token = req.cookies?.gotouch_token || req.query.token || (req.headers.authorization && req.headers.authorization.split(' ')[1]);
   const decoded = auth.verifyToken(token);
+  const shareOk = auth.verifyShareSecret(req.query.secret || '', id);
 
-  if (!decoded && !auth.verifyPin(req.query.pin || '')) {
-    return res.status(401).json({ error: 'Unauthorized', message: 'PIN authentication required.' });
+  if (!decoded && !shareOk) {
+    return res.status(401).json({ error: 'Unauthorized', message: 'Authentication required.' });
   }
 
   const file = db.getFileById(id);
@@ -593,6 +600,18 @@ app.get('/api/video/:id', (req, res) => {
   }
 
   streamVideoFromPixeldrain(targetUrl, reqHeaders, req, res);
+});
+
+// Generate a 1-hour expiring share secret so external players (VLC, mpv) can stream this video
+app.post('/api/video/:id/share', auth.requireAuth, (req, res) => {
+  const { id } = req.params;
+  const file = db.getFileById(id);
+  if (!file || !file.pixeldrain_id) {
+    return res.status(404).json({ error: 'Video file record not found or missing Pixeldrain ID.' });
+  }
+
+  const secret = auth.createShareSecret(id);
+  res.json({ success: true, fileId: id, secret, expiresIn: 3600 });
 });
 
 // Dedicated Gallery Page Route

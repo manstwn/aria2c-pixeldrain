@@ -372,6 +372,10 @@
           </div>
 
           <div style="margin-top: 24px; border-top: 1px solid var(--glass-stroke); padding-top: 16px; display: flex; flex-direction: column; gap: 10px;">
+            <button id="btnGenerateShare" type="button" class="btn-table-action primary" onclick="generateShareLink()" style="text-align: center; width: 100%;">
+              🔗 Generate 1h Share Link (VLC)
+            </button>
+            <span id="shareLinkStatus" style="font-size: 0.75rem; color: var(--text-muted); text-align: center;"></span>
             <a id="linkExternalPixeldrain" href="#" target="_blank" rel="noopener" class="btn-table-action" style="text-align: center; text-decoration: none;">
               🔗 Open External Pixeldrain Page
             </a>
@@ -425,6 +429,6 @@
   <!-- TOAST NOTIFICATION SYSTEM -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="watch.js?v=2.2"></script>
+  <script src="watch.js?v=2.3"></script>
 </body>
 </html>
