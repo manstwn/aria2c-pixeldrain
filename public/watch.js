@@ -6,6 +6,30 @@ let currentPin = '';
 let currentFile = null;
 let currentFileId = null;
 
+const reportedErrors = new Set();
+const reportedPlayable = new Set();
+
+function reportPlaybackResult(id, ok, message) {
+  if (!id) return;
+  if (ok) {
+    if (reportedPlayable.has(id)) return;
+    reportedPlayable.add(id);
+    fetch(`/api/files/${id}/report-playable`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    }).catch(() => {});
+  } else {
+    if (reportedErrors.has(id)) return;
+    reportedErrors.add(id);
+    fetch(`/api/files/${id}/report-playback-error`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message })
+    }).catch(() => {});
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const urlParams = new URLSearchParams(window.location.search);
   currentFileId = urlParams.get('id');
@@ -159,10 +183,17 @@ async function loadVideoDetails() {
         else if (err.code === 3) errMsg = 'Video decoding failed or media corrupt.';
         else if (err.code === 4) errMsg = 'Video format not supported or stream returned 404/401 error.';
       }
+      if (err && (err.code === 3 || err.code === 4)) {
+        reportPlaybackResult(currentFileId, false, err.message || errMsg);
+      }
       showToast('⚠️ ' + errMsg, 'error');
       const sub = document.getElementById('videoSub');
       if (sub) sub.textContent = '⚠️ Player Error: ' + errMsg;
     };
+
+    player.addEventListener('playing', () => {
+      reportPlaybackResult(currentFile.id, true);
+    });
 
     // Populate Under-Title Meta Sub: duration - resolution - size
     const meta = currentFile.metadata || {};

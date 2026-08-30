@@ -432,8 +432,34 @@ app.delete('/api/files/:id', auth.requireAuth, async (req, res) => {
 });
 
 /**
+ * Sniff first bytes of a media stream to identify container or detect non-media files
+ */
+function sniffMediaContainer(buf) {
+  if (!buf || buf.length < 4) return null;
+  if (buf[0] === 0x1A && buf[1] === 0x45 && buf[2] === 0xDF && buf[3] === 0xA3) return 'matroska';
+  const head = buf.toString('latin1', 0, Math.min(buf.length, 12));
+  if (buf.length >= 8 && buf.toString('latin1', 4, 8) === 'ftyp') return 'mp4';
+  if (head.startsWith('RIFF') && buf.length >= 12 && buf.toString('latin1', 8, 12) === 'AVI ') return 'avi';
+  if (head.startsWith('FLV')) return 'flv';
+  if (head.startsWith('OggS')) return 'ogg';
+  if (buf[0] === 0x47) return 'ts';
+  if (head.startsWith('ID3')) return 'mp3';
+  if (buf[0] === 0xFF && (buf[1] === 0xFB || buf[1] === 0xF3 || buf[1] === 0xF2)) return 'mp3';
+  if (head.startsWith('PK\x03\x04')) return 'not-media';
+  if (head.startsWith('\x1F\x8B')) return 'not-media';
+  if (head.startsWith('%PDF')) return 'not-media';
+  if (head.startsWith('Rar!')) return 'not-media';
+  if (head.startsWith('7z\xBC')) return 'not-media';
+  if (head.startsWith('\xFF\xD8\xFF')) return 'not-media';
+  if (head.startsWith('\x89PNG')) return 'not-media';
+  if (head.startsWith('<!DOCTYPE') || head.startsWith('<html')) return 'not-media';
+  return null;
+}
+
+/**
  * Test whether a pixeldrain video stream is actually playable via the proxy,
  * mirroring the exact request the watch player makes (Range request + token).
+ * Checks HTTP status, Content-Type and container magic bytes of the first chunk.
  */
 async function testVideoPlayability(file) {
   const axios = require('axios');
@@ -441,7 +467,7 @@ async function testVideoPlayability(file) {
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': '*/*',
-    'Range': 'bytes=0-1023'
+    'Range': 'bytes=0-2047'
   };
 
   const pixeldrainToken = (process.env.PIXELDRAIN_API_TOKEN || '').trim();
@@ -457,8 +483,36 @@ async function testVideoPlayability(file) {
       validateStatus: () => true,
       responseType: 'stream'
     });
-    if (res.data && res.data.destroy) res.data.destroy();
+
+    const contentType = (res.headers['content-type'] || '').toLowerCase();
+    let firstChunk = Buffer.alloc(0);
+    if (res.data && res.data.destroy) {
+      try {
+        firstChunk = await new Promise((resolve) => {
+          const timer = setTimeout(() => { try { res.data.destroy(); } catch (e) {} resolve(Buffer.alloc(0)); }, 5000);
+          res.data.once('data', (chunk) => {
+            clearTimeout(timer);
+            try { res.data.destroy(); } catch (e) {}
+            resolve(chunk);
+          });
+          res.data.once('error', () => {
+            clearTimeout(timer);
+            resolve(Buffer.alloc(0));
+          });
+        });
+      } catch (e) {}
+      try { res.data.destroy(); } catch (e) {}
+    }
+
     if (res.status === 200 || res.status === 206) {
+      const magic = sniffMediaContainer(firstChunk);
+      const badType = contentType.includes('text/html') || contentType.includes('text/plain') || contentType.includes('application/json') || contentType.includes('image/');
+      if (magic === 'not-media') {
+        return { playable: false, error: 'File is not a recognized video container' };
+      }
+      if (badType && magic === null) {
+        return { playable: false, error: `Not a video stream (Content-Type: ${contentType || 'unknown'})` };
+      }
       return { playable: true, error: '' };
     }
     return { playable: false, error: `HTTP ${res.status}` };
@@ -491,6 +545,42 @@ app.post('/api/files/check-playability', auth.requireAuth, async (req, res) => {
     }
 
     res.json({ success: true, checked, playable, broken, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Client reports the browser actually failed to play/decode this video -> mark not playable
+app.post('/api/files/:id/report-playback-error', auth.requireAuth, (req, res) => {
+  try {
+    const { id } = req.params;
+    const file = db.getFileById(id);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+
+    db.updateFile(id, {
+      playable: false,
+      playable_error: (req.body && req.body.message) || 'Browser failed to decode/play the video',
+      playable_checked_at: new Date().toISOString()
+    });
+    res.json({ success: true, playable: false });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Client reports playback started successfully -> mark playable (clears stale broken flag)
+app.post('/api/files/:id/report-playable', auth.requireAuth, (req, res) => {
+  try {
+    const { id } = req.params;
+    const file = db.getFileById(id);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+
+    db.updateFile(id, {
+      playable: true,
+      playable_error: '',
+      playable_checked_at: new Date().toISOString()
+    });
+    res.json({ success: true, playable: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
