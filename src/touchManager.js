@@ -83,16 +83,22 @@ async function touchFileRecord(file) {
   }
 }
 
+function getTouchIntervalDays() {
+  const days = parseInt(process.env.TOUCH_INTERVAL_DAYS, 10);
+  return (!isNaN(days) && days > 0) ? days : 30;
+}
+
 /**
- * Touch files that haven't been touched in 30+ days.
+ * Touch files that haven't been touched in TOUCH_INTERVAL_DAYS+ days (default: 30).
  * Evaluates last_touched (falling back to created_at if last_touched is missing).
- * Skips files that were touched less than 30 days ago, and skips DEAD files.
- * @param {boolean} force - If true, bypasses the 30-day age check (e.g. manual override)
+ * Skips files that were touched recently, and skips DEAD files.
+ * @param {boolean} force - If true, bypasses the interval check (e.g. manual override)
  */
 async function touchAllFiles(force = false) {
   const files = db.getAllFiles();
   const now = Date.now();
-  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const touchIntervalDays = getTouchIntervalDays();
+  const intervalMs = touchIntervalDays * 24 * 60 * 60 * 1000;
 
   const eligibleFiles = files.filter(file => {
     // Skip dead files
@@ -107,19 +113,19 @@ async function touchAllFiles(force = false) {
     const lastTouchTime = lastTouchStr ? new Date(lastTouchStr).getTime() : 0;
     const ageMs = now - lastTouchTime;
 
-    if (ageMs < THIRTY_DAYS_MS) {
+    if (ageMs < intervalMs) {
       const daysSinceTouch = Math.floor(ageMs / (24 * 60 * 60 * 1000));
-      const daysRemaining = 30 - daysSinceTouch;
+      const daysRemaining = touchIntervalDays - daysSinceTouch;
       console.log(`[TouchManager] Skipping ${file.filename || file.id} — last touched ${daysSinceTouch} day(s) ago (next touch in ~${daysRemaining} day(s)).`);
       return false;
     }
     return true;
   });
 
-  console.log(`[TouchManager] Batch touch: ${eligibleFiles.length} eligible (30+ days since last touch) out of ${files.length} total records.`);
+  console.log(`[TouchManager] Batch touch: ${eligibleFiles.length} eligible (${touchIntervalDays}+ days since last touch) out of ${files.length} total records.`);
 
   if (eligibleFiles.length === 0) {
-    console.log('[TouchManager] No files need touching today (all files touched within last 30 days).');
+    console.log(`[TouchManager] No files need touching today (all files touched within last ${touchIntervalDays} days).`);
     return { touchedCount: 0, deadCount: 0, total: files.length, skipped: files.length };
   }
 
@@ -138,18 +144,19 @@ async function touchAllFiles(force = false) {
     await sleep(delay);
   }
 
-  console.log(`[TouchManager] Batch touch complete. Touched: ${touchedCount} | Dead: ${deadCount} | Skipped (< 30 days since last touch): ${files.length - eligibleFiles.length}`);
+  console.log(`[TouchManager] Batch touch complete. Touched: ${touchedCount} | Dead: ${deadCount} | Skipped (< ${touchIntervalDays} days since last touch): ${files.length - eligibleFiles.length}`);
   return { touchedCount, deadCount, total: files.length, skipped: files.length - eligibleFiles.length };
 }
 
 /**
  * Initialize daily cron scheduler (Runs every day at midnight 00:00)
- * Evaluates last_touched timestamp — touches each file only once every 30 days.
+ * Evaluates last_touched timestamp — touches each file only once every TOUCH_INTERVAL_DAYS (default: 30).
  */
 function initScheduler() {
-  console.log('[TouchManager] Initializing daily cron scheduler (0 0 * * *) — touches files only once every 30 days based on last_touched...');
+  const touchIntervalDays = getTouchIntervalDays();
+  console.log(`[TouchManager] Initializing daily cron scheduler (0 0 * * *) — touches files only once every ${touchIntervalDays} days based on last_touched...`);
   cron.schedule('0 0 * * *', async () => {
-    console.log('[TouchManager] Daily cron triggered! Checking files not touched in 30+ days...');
+    console.log(`[TouchManager] Daily cron triggered! Checking files not touched in ${touchIntervalDays}+ days...`);
     try {
       await touchAllFiles();
     } catch (err) {
