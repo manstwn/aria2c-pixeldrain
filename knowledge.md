@@ -100,11 +100,11 @@ sequenceDiagram
 
     Cron->>Touch: Trigger daily task (0 0 * * *)
     Touch->>DB: getAllFiles()
-    Touch->>Touch: Filter LIVE links where last_touched > 23h
+    Touch->>Touch: Filter LIVE links where last_touched >= 30 days
     loop For Each Qualified File
-        Touch->>Touch: Random Delay (2s - 7s)
-        Touch->>Remote: HTTP GET download_url
-        alt HTTP 200 OK
+        Touch->>Touch: Random Delay (1s - 3s)
+        Touch->>Remote: Micro-download 12% chunk (Range: bytes=0-12%)
+        alt HTTP 200 / 206 OK
             Touch->>DB: updateFile(id, { last_touched: NOW, status: "LIVE" })
         else HTTP 404 / Error
             Touch->>DB: updateFile(id, { status: "DEAD" })

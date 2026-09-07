@@ -403,8 +403,9 @@ app.post('/api/files/:id/touch', auth.requireAuth, async (req, res) => {
 
 app.post('/api/files/touch-all', auth.requireAuth, async (req, res) => {
   try {
-    const results = await touchManager.touchAllFiles();
-    res.json({ success: true, results });
+    const force = req.query.force === 'true' || req.body?.force === true;
+    const results = await touchManager.touchAllFiles(force);
+    res.json({ success: true, results, count: results.touchedCount });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

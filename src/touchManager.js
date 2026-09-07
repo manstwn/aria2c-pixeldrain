@@ -78,35 +78,48 @@ async function touchFileRecord(file) {
     }
 
   } catch (err) {
-    console.warn(`[TouchManager Warning] Chunk-download error for ${filename} (${targetUrl}): ${err.message}`);
+    console.warn(`[TouchManager Warning] Chunk-download error for ${filename} (${directFileUrl}): ${err.message}`);
     return { success: false, status: file.status, file };
   }
 }
 
 /**
- * Touch files that are 30+ days old since created_at.
- * Files younger than 30 days don't need touching — Pixeldrain won't expire them yet.
+ * Touch files that haven't been touched in 30+ days.
+ * Evaluates last_touched (falling back to created_at if last_touched is missing).
+ * Skips files that were touched less than 30 days ago, and skips DEAD files.
+ * @param {boolean} force - If true, bypasses the 30-day age check (e.g. manual override)
  */
-async function touchAllFiles() {
+async function touchAllFiles(force = false) {
   const files = db.getAllFiles();
   const now = Date.now();
   const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
   const eligibleFiles = files.filter(file => {
-    const createdAt = file.created_at ? new Date(file.created_at).getTime() : 0;
-    const ageMs = now - createdAt;
+    // Skip dead files
+    if (file.status === 'DEAD') {
+      return false;
+    }
+
+    if (force) return true;
+
+    // Focus on last_touched; fall back to created_at if last_touched is absent
+    const lastTouchStr = file.last_touched || file.created_at;
+    const lastTouchTime = lastTouchStr ? new Date(lastTouchStr).getTime() : 0;
+    const ageMs = now - lastTouchTime;
+
     if (ageMs < THIRTY_DAYS_MS) {
-      const daysOld = Math.floor(ageMs / (24 * 60 * 60 * 1000));
-      console.log(`[TouchManager] Skipping ${file.filename || file.id} — only ${daysOld} day(s) old, not yet 30 days.`);
+      const daysSinceTouch = Math.floor(ageMs / (24 * 60 * 60 * 1000));
+      const daysRemaining = 30 - daysSinceTouch;
+      console.log(`[TouchManager] Skipping ${file.filename || file.id} — last touched ${daysSinceTouch} day(s) ago (next touch in ~${daysRemaining} day(s)).`);
       return false;
     }
     return true;
   });
 
-  console.log(`[TouchManager] Batch touch: ${eligibleFiles.length} eligible (30+ days old) out of ${files.length} total records.`);
+  console.log(`[TouchManager] Batch touch: ${eligibleFiles.length} eligible (30+ days since last touch) out of ${files.length} total records.`);
 
   if (eligibleFiles.length === 0) {
-    console.log('[TouchManager] No files need touching today.');
+    console.log('[TouchManager] No files need touching today (all files touched within last 30 days).');
     return { touchedCount: 0, deadCount: 0, total: files.length, skipped: files.length };
   }
 
@@ -125,18 +138,18 @@ async function touchAllFiles() {
     await sleep(delay);
   }
 
-  console.log(`[TouchManager] Batch touch complete. Touched: ${touchedCount} | Dead: ${deadCount} | Skipped (< 30 days): ${files.length - eligibleFiles.length}`);
+  console.log(`[TouchManager] Batch touch complete. Touched: ${touchedCount} | Dead: ${deadCount} | Skipped (< 30 days since last touch): ${files.length - eligibleFiles.length}`);
   return { touchedCount, deadCount, total: files.length, skipped: files.length - eligibleFiles.length };
 }
 
 /**
  * Initialize daily cron scheduler (Runs every day at midnight 00:00)
- * Checks each file's created_at age — only touches files 30+ days old.
+ * Evaluates last_touched timestamp — touches each file only once every 30 days.
  */
 function initScheduler() {
-  console.log('[TouchManager] Initializing daily cron scheduler (0 0 * * *) — will touch files aged 30+ days...');
+  console.log('[TouchManager] Initializing daily cron scheduler (0 0 * * *) — touches files only once every 30 days based on last_touched...');
   cron.schedule('0 0 * * *', async () => {
-    console.log('[TouchManager] Daily cron triggered! Checking file ages and touching eligible records...');
+    console.log('[TouchManager] Daily cron triggered! Checking files not touched in 30+ days...');
     try {
       await touchAllFiles();
     } catch (err) {

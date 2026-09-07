@@ -51,11 +51,11 @@
 
 ### 3.4 Daily Touch Manager
 
-* **Schedule:** Executes every 24 hours via `node-cron`.
-* **Target Selection:** Reads `data/files.json` and filters for entries where `status === "LIVE"` and `last_touched` is older than 23 hours.
-* **Execution & Rate Limiting:** Iterates through selected items, making an HTTP `GET` request to the file's `downloadPage`. Introduces a random delay (2–7 seconds) between pings to prevent IP rate limits.
+* **Schedule:** Executes every 24 hours at midnight via `node-cron` (`0 0 * * *`).
+* **Target Selection:** Reads persistent file records and filters for entries where `status !== "DEAD"` and `last_touched` (or `created_at`) is older than 30 days. Files touched within the last 30 days are skipped.
+* **Execution & Rate Limiting:** Iterates through eligible items, downloading a 12% chunk (exceeding Pixeldrain's 10% activity threshold to reset the 60-day expiration timer). Introduces a randomized delay (1–3 seconds) between files to prevent rate limits.
 * **State Updates:**
-* **Success (200 OK):** Updates `last_touched` timestamp in `data/files.json`.
+* **Success (200 / 206 Partial Content):** Updates `last_touched` timestamp and ensures `status = "LIVE"`.
 * **Failure (404 Not Found):** Updates `status` to `"DEAD"`.
 
 
