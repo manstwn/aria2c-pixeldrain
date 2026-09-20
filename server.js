@@ -129,25 +129,9 @@ app.get('/api/stream', (req, res) => {
       await db.refreshFromMongo();
       const downloadsStatus = await aria2.getDownloadsStatus();
       const conn = await aria2.checkConnection();
-      const persistentQueue = db.getAllQueue();
-
-      // Merge persistent queue items so nothing is omitted in SSE payload
-      const downloads = [...downloadsStatus];
-      persistentQueue.forEach(qItem => {
-        const exists = downloadsStatus.some(s => (qItem.gid && s.gid === qItem.gid) || s.filename === qItem.filename || s.gid === qItem.id);
-        if (!exists) {
-          downloads.push({
-            gid: qItem.id || qItem.gid,
-            filename: qItem.filename || qItem.custom_name || 'Queued Item',
-            status: qItem.status || 'QUEUED',
-            progress: 0,
-            downloadSpeed: 0,
-            completedLength: 0,
-            totalLength: 0,
-            errorMessage: qItem.error || ''
-          });
-        }
-      });
+      // Merge held queue items (rows with no live task) so nothing is omitted in the SSE payload.
+      // A row whose task is alive is already represented by that task, so it is not duplicated here.
+      const downloads = [...downloadsStatus, ...aria2.getUnmatchedQueueTasks(downloadsStatus)];
 
       const files = db.getAllFiles();
       const dataSizeBytes = getFolderSize(path.join(__dirname, 'data'));
@@ -205,25 +189,8 @@ app.get('/api/downloads', auth.requireAuth, async (req, res) => {
   try {
     const status = await aria2.getDownloadsStatus();
     const conn = await aria2.checkConnection();
-    const persistentQueue = db.getAllQueue();
-
-    // Merge persistent queue items from data/queue.json so nothing is lost on page refresh
-    const mergedDownloads = [...status];
-    persistentQueue.forEach(qItem => {
-      const existsInAria2 = status.some(s => (qItem.gid && s.gid === qItem.gid) || s.filename === qItem.filename || s.gid === qItem.id);
-      if (!existsInAria2) {
-        mergedDownloads.push({
-          gid: qItem.id || qItem.gid,
-          filename: qItem.filename || qItem.custom_name || 'Queued Item',
-          status: qItem.status || 'PAUSED',
-          progress: 0,
-          downloadSpeed: 0,
-          completedLength: 0,
-          totalLength: 0,
-          errorMessage: qItem.error || ''
-        });
-      }
-    });
+    // Merge held queue items from data/queue.json / Mongo so nothing is lost on page refresh
+    const mergedDownloads = [...status, ...aria2.getUnmatchedQueueTasks(status)];
 
     res.json({ aria2Connection: conn, downloads: mergedDownloads });
   } catch (err) {

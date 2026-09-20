@@ -197,7 +197,7 @@ async function handleLogout() {
    DOWNLOAD TASK SUBMISSION & MONITORING
    ========================================================================== */
 
-let selectedEngine = 'aria2';
+let selectedEngine = 'ytdlp';
 
 function selectEngine(engine) {
   selectedEngine = engine;
@@ -214,7 +214,7 @@ function selectEngine(engine) {
   }
 }
 
-let batchEngine = 'aria2';
+let batchEngine = 'ytdlp';
 
 function selectBatchEngine(engine) {
   batchEngine = engine;
@@ -1432,6 +1432,7 @@ async function saveCustomName(el) {
 let activeGalleryFileId = null;
 let activeGalleryImages = [];
 let currentGalleryIndex = 0;
+let lightboxReturnFocus = null;
 
 function openGalleryModal(id) {
   const file = ledgerFiles.find(f => f.id === id);
@@ -1447,10 +1448,15 @@ function openGalleryModal(id) {
   currentGalleryIndex = selectedIdx !== -1 ? selectedIdx : 0;
 
   const displayName = file.custom_name || file.original_filename || file.filename;
-  document.getElementById('galleryModalTitle').textContent = `${displayName} — Screenshot Gallery`;
+  document.getElementById('galleryModalTitle').textContent = displayName;
 
+  const modal = document.getElementById('galleryModal');
+  lightboxReturnFocus = document.activeElement;
+  modal.classList.remove('hidden');
   renderGalleryState();
-  document.getElementById('galleryModal').classList.remove('hidden');
+
+  const closeBtn = modal.querySelector('.lightbox-icon-btn');
+  if (closeBtn) closeBtn.focus();
 }
 
 function renderGalleryState() {
@@ -1459,32 +1465,41 @@ function renderGalleryState() {
   const total = activeGalleryImages.length;
   const currentUrl = activeGalleryImages[currentGalleryIndex];
 
-  document.getElementById('galleryModalSub').textContent = `Frame ${currentGalleryIndex + 1} of ${total}`;
-  document.getElementById('galleryMainImage').src = currentUrl;
+  document.getElementById('galleryModalSub').textContent = `${currentGalleryIndex + 1} / ${total}`;
+
+  const img = document.getElementById('galleryMainImage');
+  const loader = document.getElementById('galleryLoader');
+  if (loader) loader.classList.add('show');
+  img.classList.remove('loaded');
+  img.onload = () => {
+    img.classList.add('loaded');
+    if (loader) loader.classList.remove('show');
+  };
+  img.onerror = () => {
+    img.classList.add('loaded');
+    if (loader) loader.classList.remove('show');
+  };
+  img.alt = `Screenshot frame ${currentGalleryIndex + 1} of ${total}`;
+  img.src = currentUrl;
 
   const activeFile = ledgerFiles.find(f => f.id === activeGalleryFileId);
   const btnSet = document.getElementById('btnSetThumbnail');
   if (btnSet && activeFile) {
     const isSelected = activeFile.selected_thumbnail === currentUrl;
-    if (isSelected) {
-      btnSet.innerHTML = '⭐ Primary Cover';
-      btnSet.style.background = 'rgba(16, 185, 129, 0.25)';
-      btnSet.style.borderColor = 'rgba(16, 185, 129, 0.5)';
-      btnSet.style.color = '#34d399';
-    } else {
-      btnSet.innerHTML = '📌 Set as Cover';
-      btnSet.style.background = '';
-      btnSet.style.borderColor = '';
-      btnSet.style.color = '';
-    }
+    btnSet.classList.toggle('is-cover', isSelected);
+    btnSet.innerHTML = isSelected ? '⭐ Primary cover' : '📌 Set as cover';
   }
 
   const strip = document.getElementById('galleryThumbStrip');
   strip.innerHTML = activeGalleryImages.map((tUrl, idx) => `
-    <div class="gallery-thumb-item ${idx === currentGalleryIndex ? 'active' : ''}" onclick="setGalleryIndex(${idx})">
-      <img src="${tUrl}" alt="Thumb ${idx + 1}" loading="lazy" decoding="async" />
-    </div>
+    <button type="button" class="lightbox-thumb ${idx === currentGalleryIndex ? 'active' : ''}"
+            onclick="setGalleryIndex(${idx})" aria-label="Frame ${idx + 1}" aria-current="${idx === currentGalleryIndex}">
+      <img src="${tUrl}" alt="" loading="lazy" decoding="async" />
+    </button>
   `).join('');
+
+  const activeThumb = strip.querySelector('.lightbox-thumb.active');
+  if (activeThumb) activeThumb.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
 }
 
 async function setAsCoverThumbnail() {
@@ -1535,15 +1550,35 @@ function nextGalleryImage() {
 
 function closeGalleryModal() {
   document.getElementById('galleryModal').classList.add('hidden');
+  if (lightboxReturnFocus && typeof lightboxReturnFocus.focus === 'function') {
+    lightboxReturnFocus.focus();
+  }
+  lightboxReturnFocus = null;
 }
 
-// Keyboard arrow key navigation support for Gallery Modal
+// Keyboard navigation support for Gallery Modal (arrows browse, Esc closes, Tab stays trapped)
 document.addEventListener('keydown', (e) => {
   const modal = document.getElementById('galleryModal');
-  if (modal && !modal.classList.contains('hidden')) {
-    if (e.key === 'ArrowLeft') prevGalleryImage();
-    if (e.key === 'ArrowRight') nextGalleryImage();
-    if (e.key === 'Escape') closeGalleryModal();
+  if (!modal || modal.classList.contains('hidden')) return;
+
+  if (e.key === 'ArrowLeft') {
+    prevGalleryImage();
+  } else if (e.key === 'ArrowRight') {
+    nextGalleryImage();
+  } else if (e.key === 'Escape') {
+    closeGalleryModal();
+  } else if (e.key === 'Tab') {
+    const focusables = modal.querySelectorAll('button, [href], input, [tabindex]:not([tabindex="-1"])');
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
   }
 });
 
@@ -1876,7 +1911,9 @@ function startTableHoverSlideshow(evt, fileId) {
 
   // Hover intent delay (180ms) to prevent unwanted requests while scrolling/moving cursor
   tableHoverTimers[fileId] = setTimeout(() => {
-    let frameIdx = 0;
+    // Resume from whichever frame is currently on screen instead of snapping to frame 1
+    let frameIdx = file.thumbnails.indexOf(file.selected_thumbnail);
+    if (frameIdx < 0) frameIdx = 0;
     let activeLayer = 'bg';
 
     tableHoverIntervals[fileId] = setInterval(() => {
@@ -1884,18 +1921,28 @@ function startTableHoverSlideshow(evt, fileId) {
       const nextUrl = file.thumbnails[frameIdx];
       const layerBg = document.getElementById(`tableLayerBg_${fileId}`);
       const layerFg = document.getElementById(`tableLayerFg_${fileId}`);
+      if (!layerBg || !layerFg || !nextUrl) return;
 
-      if (layerBg && layerFg && nextUrl) {
+      // Only crossfade once the incoming frame has decoded; otherwise keep the
+      // current frame on screen instead of flashing an empty layer.
+      const preload = new Image();
+      preload.decoding = 'async';
+      preload.onload = () => {
+        const bg = document.getElementById(`tableLayerBg_${fileId}`);
+        const fg = document.getElementById(`tableLayerFg_${fileId}`);
+        if (!bg || !fg) return;
+
         if (activeLayer === 'bg') {
-          layerFg.src = nextUrl;
-          layerFg.style.opacity = '1';
+          fg.src = nextUrl;
+          fg.style.opacity = '1';
           activeLayer = 'fg';
         } else {
-          layerBg.src = nextUrl;
-          layerFg.style.opacity = '0';
+          bg.src = nextUrl;
+          fg.style.opacity = '0';
           activeLayer = 'bg';
         }
-      }
+      };
+      preload.src = nextUrl;
     }, 650);
   }, 180);
 }
@@ -1922,8 +1969,17 @@ function stopTableHoverSlideshow(evt, fileId) {
   const layerFg = document.getElementById(`tableLayerFg_${fileId}`);
 
   if (layerBg && layerFg && defaultThumb) {
-    layerBg.src = defaultThumb;
-    layerFg.style.opacity = '0';
+    // Preload the resting frame before revealing it so leaving doesn't blink
+    // through an empty layer either.
+    const restore = new Image();
+    restore.onload = () => {
+      const bg = document.getElementById(`tableLayerBg_${fileId}`);
+      const fg = document.getElementById(`tableLayerFg_${fileId}`);
+      if (!bg || !fg) return;
+      bg.src = defaultThumb;
+      fg.style.opacity = '0';
+    };
+    restore.src = defaultThumb;
   }
 }
 

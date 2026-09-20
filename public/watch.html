@@ -250,16 +250,22 @@
       </div>
 
       <div class="header-right">
-        <!-- ./data Disk Usage Pill -->
-        <div class="status-indicator-pill" id="storagePill" title="Total Disk Usage of ./data folder">
-          <span class="material-symbols-outlined" style="font-size: 14px; color: var(--color-electric-blue);">hard_drive</span>
-          <span id="storageText">0 MB</span>
+        <!-- Resource metrics -->
+        <div class="topbar-metrics">
+          <div class="status-indicator-pill" id="storagePill" title="Total disk usage of ./data">
+            <span class="material-symbols-outlined status-pill-icon">hard_drive</span>
+            <span id="storageText">0 MB</span>
+          </div>
         </div>
 
-        <!-- SSE Stream Green Dot Badge -->
-        <div class="status-indicator-pill sse-pill" title="Real-Time SSE Stream Active">
-          <span class="status-dot online pulse-emerald"></span>
-          <span>SSE Live</span>
+        <span class="topbar-divider" aria-hidden="true"></span>
+
+        <!-- Live service status -->
+        <div class="topbar-live">
+          <div class="status-indicator-pill sse-pill" title="Real-time SSE stream active">
+            <span class="status-dot online pulse-emerald"></span>
+            <span>SSE Live</span>
+          </div>
         </div>
 
         <!-- Logout Power Button -->

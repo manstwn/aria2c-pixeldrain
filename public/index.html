@@ -85,34 +85,37 @@
       </div>
 
       <div class="header-right">
-        <!-- ./data Disk Usage Pill -->
-        <div class="status-indicator-pill" id="storagePill" title="Total Disk Usage of ./data folder">
-          <span class="material-symbols-outlined" style="font-size: 14px; color: var(--color-electric-blue);">hard_drive</span>
-          <span id="storageText">0 MB</span>
+        <!-- Resource & service metrics -->
+        <div class="topbar-metrics">
+          <div class="status-indicator-pill" id="storagePill" title="Total disk usage of ./data">
+            <span class="material-symbols-outlined status-pill-icon">hard_drive</span>
+            <span id="storageText">0 MB</span>
+          </div>
+
+          <button type="button" class="status-indicator-pill is-clickable" id="dbStatusPill" onclick="openDbModal()" title="Database engine & MongoDB Compass status">
+            <span class="material-symbols-outlined status-pill-icon">database</span>
+            <span id="dbStatusText">DB: JSON</span>
+          </button>
+
+          <button type="button" class="status-indicator-pill is-clickable" id="s3StatusPill" onclick="openS3SyncModal()" title="S3 image storage status & migration (/aria2c)">
+            <span class="material-symbols-outlined status-pill-icon">cloud</span>
+            <span id="s3StatusText">S3 Storage</span>
+          </button>
         </div>
 
-        <!-- DB Engine Status Pill (MongoDB / JSON) -->
-        <div class="status-indicator-pill" id="dbStatusPill" onclick="openDbModal()" style="cursor: pointer;" title="Database Engine & MongoDB Compass Status">
-          <span class="material-symbols-outlined" style="font-size: 14px; color: #10b981;">database</span>
-          <span id="dbStatusText">DB: JSON</span>
-        </div>
+        <span class="topbar-divider" aria-hidden="true"></span>
 
-        <!-- S3 Image Storage Status Pill -->
-        <div class="status-indicator-pill" id="s3StatusPill" onclick="openS3SyncModal()" style="cursor: pointer;" title="S3 Image Storage Status & Migration (/aria2c)">
-          <span class="material-symbols-outlined" style="font-size: 14px; color: #38bdf8;">cloud</span>
-          <span id="s3StatusText">S3 Storage</span>
-        </div>
+        <!-- Live service status -->
+        <div class="topbar-live">
+          <div class="status-indicator-pill sse-pill" title="Real-time SSE stream active">
+            <span class="status-dot online pulse-emerald"></span>
+            <span>SSE Live</span>
+          </div>
 
-        <!-- SSE Stream Green Dot Badge -->
-        <div class="status-indicator-pill sse-pill" title="Real-Time SSE Stream Active">
-          <span class="status-dot online pulse-emerald"></span>
-          <span>SSE Live</span>
-        </div>
-
-        <!-- Aria2 RPC Green Dot Badge -->
-        <div class="status-indicator-pill" id="aria2StatusBadge" title="Aria2 RPC Daemon Status">
-          <span class="status-dot offline"></span>
-          <span id="aria2StatusText">Aria2 RPC</span>
+          <div class="status-indicator-pill" id="aria2StatusBadge" title="Aria2 RPC daemon status">
+            <span class="status-dot offline"></span>
+            <span id="aria2StatusText">Aria2 RPC</span>
+          </div>
         </div>
 
         <!-- Logout Power Button -->
@@ -141,15 +144,15 @@
 
           <form id="downloadForm" onsubmit="handleDownloadSubmit(event)" class="submission-form" style="margin: 0;">
             <div class="engine-selector">
-              <label class="engine-pill active" id="enginePillAria2" onclick="selectEngine('aria2')">
-                <input type="radio" name="downloadEngine" value="aria2" checked style="display:none;">
-                <span class="material-symbols-outlined" style="font-size: 16px;">bolt</span>
-                <span>Aria2c (Multi-Conn File)</span>
-              </label>
-              <label class="engine-pill" id="enginePillYtdlp" onclick="selectEngine('ytdlp')">
-                <input type="radio" name="downloadEngine" value="ytdlp" style="display:none;">
+              <label class="engine-pill active" id="enginePillYtdlp" onclick="selectEngine('ytdlp')">
+                <input type="radio" name="downloadEngine" value="ytdlp" checked style="display:none;">
                 <span class="material-symbols-outlined" style="font-size: 16px;">movie</span>
                 <span>yt-dlp (Video / HLS Stream)</span>
+              </label>
+              <label class="engine-pill" id="enginePillAria2" onclick="selectEngine('aria2')">
+                <input type="radio" name="downloadEngine" value="aria2" style="display:none;">
+                <span class="material-symbols-outlined" style="font-size: 16px;">bolt</span>
+                <span>Aria2c (Multi-Conn File)</span>
               </label>
             </div>
             <div class="download-form-fields">
@@ -392,36 +395,33 @@
     </div>
   </div>
 
-  <!-- INTERACTIVE SCREENSHOT LIGHTBOX MODAL (MINIMALIST) -->
-  <div id="galleryModal" class="auth-overlay hidden" onclick="if(event.target===this) closeGalleryModal()">
-    <div class="auth-card glass-panel gallery-modal-card">
-      <div class="flex-between gallery-modal-header">
-        <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
-          <span style="font-size: 1.1rem;">🖼️</span>
-          <h3 id="galleryModalTitle" class="gallery-modal-title">Screenshot Frame Gallery</h3>
-          <span id="galleryModalSub" class="gallery-modal-counter">Frame 1 of 15</span>
+  <!-- INTERACTIVE SCREENSHOT LIGHTBOX -->
+  <div id="galleryModal" class="auth-overlay lightbox-overlay hidden" role="dialog" aria-modal="true" aria-label="Screenshot frame gallery" onclick="if(event.target===this) closeGalleryModal()">
+    <div class="lightbox">
+      <header class="lightbox-head">
+        <div class="lightbox-heading">
+          <h3 id="galleryModalTitle" class="lightbox-title">Screenshot gallery</h3>
+          <span id="galleryModalSub" class="lightbox-counter">1 / 1</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <button id="btnSetThumbnail" class="btn-table-action" onclick="setAsCoverThumbnail()" title="Set current frame as default cover thumbnail">
-            📌 Set as Cover
-          </button>
-          <button class="icon-btn-minimal" onclick="closeGalleryModal()" title="Close (ESC)">✕</button>
+        <div class="lightbox-tools">
+          <button id="btnSetThumbnail" class="lightbox-btn" onclick="setAsCoverThumbnail()" title="Set current frame as the default cover">📌 Set as cover</button>
+          <button class="lightbox-icon-btn" onclick="closeGalleryModal()" title="Close (Esc)" aria-label="Close gallery">✕</button>
         </div>
+      </header>
+
+      <div class="lightbox-stage">
+        <button class="lightbox-nav prev" onclick="prevGalleryImage()" title="Previous frame (Left Arrow)" aria-label="Previous frame">❮</button>
+        <div class="lightbox-frame">
+          <div id="galleryLoader" class="lightbox-loader" aria-hidden="true"><span class="lightbox-spinner"></span></div>
+          <img id="galleryMainImage" src="" alt="Screenshot frame preview" />
+        </div>
+        <button class="lightbox-nav next" onclick="nextGalleryImage()" title="Next frame (Right Arrow)" aria-label="Next frame">❯</button>
       </div>
 
-      <!-- Main Stage Preview -->
-      <div class="gallery-stage-container">
-        <button class="gallery-nav-btn prev" onclick="prevGalleryImage()" title="Previous Frame (Left Arrow)">❮</button>
-        <div class="gallery-main-stage">
-          <img id="galleryMainImage" src="" alt="Screenshot Frame Preview" />
-        </div>
-        <button class="gallery-nav-btn next" onclick="nextGalleryImage()" title="Next Frame (Right Arrow)">❯</button>
-      </div>
-
-      <!-- Thumbnail Strip Below -->
-      <div id="galleryThumbStrip" class="gallery-thumb-strip">
-        <!-- Rendered dynamically -->
-      </div>
+      <footer class="lightbox-foot">
+        <div id="galleryThumbStrip" class="lightbox-strip"></div>
+        <div class="lightbox-hint" aria-hidden="true"><kbd>←</kbd><kbd>→</kbd> browse · <kbd>Esc</kbd> close</div>
+      </footer>
     </div>
   </div>
 
@@ -551,13 +551,13 @@
 
       <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; margin-top: 14px;">
         <div class="engine-selector" style="margin: 0;">
-          <label class="engine-pill active" id="batchEnginePillAria2" onclick="selectBatchEngine('aria2')">
-            <span class="material-symbols-outlined" style="font-size: 16px;">bolt</span>
-            <span>Aria2c (Multi-Conn File)</span>
-          </label>
-          <label class="engine-pill" id="batchEnginePillYtdlp" onclick="selectBatchEngine('ytdlp')">
+          <label class="engine-pill active" id="batchEnginePillYtdlp" onclick="selectBatchEngine('ytdlp')">
             <span class="material-symbols-outlined" style="font-size: 16px;">movie</span>
             <span>yt-dlp (Video / HLS Stream)</span>
+          </label>
+          <label class="engine-pill" id="batchEnginePillAria2" onclick="selectBatchEngine('aria2')">
+            <span class="material-symbols-outlined" style="font-size: 16px;">bolt</span>
+            <span>Aria2c (Multi-Conn File)</span>
           </label>
         </div>
 

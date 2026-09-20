@@ -85,22 +85,27 @@
       </div>
 
       <div class="header-right">
-        <!-- ./data Disk Usage Pill -->
-        <div class="status-indicator-pill" id="storagePill" title="Total Disk Usage of ./data folder">
-          <span class="material-symbols-outlined" style="font-size: 14px; color: var(--color-electric-blue);">hard_drive</span>
-          <span id="storageText">0 MB</span>
+        <!-- Resource metrics -->
+        <div class="topbar-metrics">
+          <div class="status-indicator-pill" id="storagePill" title="Total disk usage of ./data">
+            <span class="material-symbols-outlined status-pill-icon">hard_drive</span>
+            <span id="storageText">0 MB</span>
+          </div>
         </div>
 
-        <!-- SSE Stream Green Dot Badge -->
-        <div class="status-indicator-pill sse-pill" title="Real-Time SSE Stream Active">
-          <span class="status-dot online pulse-emerald"></span>
-          <span>SSE Live</span>
-        </div>
+        <span class="topbar-divider" aria-hidden="true"></span>
 
-        <!-- Aria2 RPC Green Dot Badge -->
-        <div class="status-indicator-pill" id="aria2StatusBadge" title="Aria2 RPC Daemon Status">
-          <span class="status-dot offline"></span>
-          <span id="aria2StatusText">Aria2 RPC</span>
+        <!-- Live service status -->
+        <div class="topbar-live">
+          <div class="status-indicator-pill sse-pill" title="Real-time SSE stream active">
+            <span class="status-dot online pulse-emerald"></span>
+            <span>SSE Live</span>
+          </div>
+
+          <div class="status-indicator-pill" id="aria2StatusBadge" title="Aria2 RPC daemon status">
+            <span class="status-dot offline"></span>
+            <span id="aria2StatusText">Aria2 RPC</span>
+          </div>
         </div>
 
         <!-- Logout Power Button -->
@@ -253,36 +258,33 @@
     </div>
   </div>
 
-  <!-- INTERACTIVE SCREENSHOT LIGHTBOX MODAL (MINIMALIST) -->
-  <div id="galleryModal" class="auth-overlay hidden" onclick="if(event.target===this) closeGalleryModal()">
-    <div class="auth-card glass-panel gallery-modal-card">
-      <div class="flex-between gallery-modal-header">
-        <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
-          <span style="font-size: 1.1rem;">🖼️</span>
-          <h3 id="galleryModalTitle" class="gallery-modal-title">Screenshot Frame Gallery</h3>
-          <span id="galleryModalSub" class="gallery-modal-counter">Frame 1 of 15</span>
+  <!-- INTERACTIVE SCREENSHOT LIGHTBOX -->
+  <div id="galleryModal" class="auth-overlay lightbox-overlay hidden" role="dialog" aria-modal="true" aria-label="Screenshot frame gallery" onclick="if(event.target===this) closeGalleryModal()">
+    <div class="lightbox">
+      <header class="lightbox-head">
+        <div class="lightbox-heading">
+          <h3 id="galleryModalTitle" class="lightbox-title">Screenshot gallery</h3>
+          <span id="galleryModalSub" class="lightbox-counter">1 / 1</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <button id="btnSetThumbnail" class="btn-table-action" onclick="setAsCoverThumbnail()" title="Set current frame as default cover thumbnail">
-            📌 Set as Cover
-          </button>
-          <button class="icon-btn-minimal" onclick="closeGalleryModal()" title="Close (ESC)">✕</button>
+        <div class="lightbox-tools">
+          <button id="btnSetThumbnail" class="lightbox-btn" onclick="setAsCoverThumbnail()" title="Set current frame as the default cover">📌 Set as cover</button>
+          <button class="lightbox-icon-btn" onclick="closeGalleryModal()" title="Close (Esc)" aria-label="Close gallery">✕</button>
         </div>
+      </header>
+
+      <div class="lightbox-stage">
+        <button class="lightbox-nav prev" onclick="prevGalleryImage()" title="Previous frame (Left Arrow)" aria-label="Previous frame">❮</button>
+        <div class="lightbox-frame">
+          <div id="galleryLoader" class="lightbox-loader" aria-hidden="true"><span class="lightbox-spinner"></span></div>
+          <img id="galleryMainImage" src="" alt="Screenshot frame preview" />
+        </div>
+        <button class="lightbox-nav next" onclick="nextGalleryImage()" title="Next frame (Right Arrow)" aria-label="Next frame">❯</button>
       </div>
 
-      <!-- Main Stage Preview -->
-      <div class="gallery-stage-container">
-        <button class="gallery-nav-btn prev" onclick="prevGalleryImage()" title="Previous Frame (Left Arrow ❮)">❮</button>
-        <div class="gallery-main-stage">
-          <img id="galleryMainImage" src="" alt="Screenshot Frame Preview" />
-        </div>
-        <button class="gallery-nav-btn next" onclick="nextGalleryImage()" title="Next Frame (Right Arrow ❯)">❯</button>
-      </div>
-
-      <!-- Thumbnail Strip Below -->
-      <div id="galleryThumbStrip" class="gallery-thumb-strip">
-        <!-- Rendered dynamically -->
-      </div>
+      <footer class="lightbox-foot">
+        <div id="galleryThumbStrip" class="lightbox-strip"></div>
+        <div class="lightbox-hint" aria-hidden="true"><kbd>←</kbd><kbd>→</kbd> browse · <kbd>Esc</kbd> close</div>
+      </footer>
     </div>
   </div>
 

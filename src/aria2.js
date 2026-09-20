@@ -188,6 +188,51 @@ async function addDownload(url, customFilename = '') {
 }
 
 /**
+ * A queue row only describes a real, in-progress download while its task is alive.
+ * If a row is left in an in-flight state with no live task (process killed, server
+ * restarted, or a Mongo/JSON delete race) it is stale and must not be reported as a
+ * phantom progress entry. Only genuinely held rows (waiting / paused) are surfaced.
+ */
+const QUEUE_IN_FLIGHT_STATUSES = new Set(['DOWNLOADING', 'UPLOADING', 'PROCESSING']);
+
+/**
+ * Return queue rows that are NOT already represented by a live task in `existingTasks`.
+ * Matching is done on both `id` and `gid` because aria2 tasks key on `gid` while the
+ * queue row keeps its own `id` (only yt-dlp tasks share the row's `id`).
+ */
+function getUnmatchedQueueTasks(existingTasks) {
+  const liveGids = new Set();
+  (existingTasks || []).forEach(t => {
+    if (t && t.gid) liveGids.add(t.gid);
+  });
+
+  const tasks = [];
+  for (const qItem of db.getAllQueue()) {
+    const qId = qItem.id || qItem.gid;
+    if (!qId) continue;
+    if (liveGids.has(qItem.id) || (qItem.gid && liveGids.has(qItem.gid))) continue;
+    if (QUEUE_IN_FLIGHT_STATUSES.has(qItem.status)) continue;
+
+    tasks.push({
+      gid: qId,
+      filename: qItem.filename || qItem.custom_name || (qItem.url ? path.basename(qItem.url.split('?')[0]) : 'Queued Item'),
+      engine: qItem.engine || 'aria2',
+      status: qItem.status || 'QUEUED',
+      progress: 0,
+      downloadSpeed: 0,
+      completedLength: 0,
+      totalLength: 0,
+      uploadProgress: 0,
+      uploadLoaded: 0,
+      uploadTotal: 0,
+      uploadSpeed: 0,
+      errorMessage: qItem.error || ''
+    });
+  }
+  return tasks;
+}
+
+/**
  * Get status of all active and waiting downloads from aria2 RPC
  */
 async function getDownloadsStatus() {
@@ -236,32 +281,9 @@ async function getDownloadsStatus() {
     const ytdlpTasks = ytdlp.getDownloadsStatus();
     formattedTasks.push(...ytdlpTasks);
 
-    const activeGids = new Set([
-      ...allTasks.map(t => t.gid),
-      ...ytdlpTasks.map(t => t.gid)
-    ]);
-    const queuedItems = db.getAllQueue();
-
-    for (const qItem of queuedItems) {
-      const qId = qItem.id || qItem.gid;
-      if (!qId || !activeGids.has(qId)) {
-        formattedTasks.push({
-          gid: qId,
-          filename: qItem.filename || qItem.custom_name || (qItem.url ? path.basename(qItem.url.split('?')[0]) : 'Queued Item'),
-          engine: qItem.engine || 'aria2',
-          status: qItem.status || 'QUEUED',
-          progress: 0,
-          downloadSpeed: 0,
-          completedLength: 0,
-          totalLength: 0,
-          uploadProgress: 0,
-          uploadLoaded: 0,
-          uploadTotal: 0,
-          uploadSpeed: 0,
-          errorMessage: qItem.error || ''
-        });
-      }
-    }
+    // Fold in queue rows that have no live task behind them (genuinely waiting items).
+    // Rows whose task is alive are already represented by that task above, so they are skipped.
+    formattedTasks.push(...getUnmatchedQueueTasks(formattedTasks));
 
     return formattedTasks;
   } catch (err) {
@@ -758,6 +780,7 @@ module.exports = {
   addDownload,
   removeDownload,
   getDownloadsStatus,
+  getUnmatchedQueueTasks,
   pauseAll,
   unpauseAll,
   pauseTask,
