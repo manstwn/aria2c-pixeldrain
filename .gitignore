@@ -19,3 +19,6 @@ temp/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local Agent / Tooling Config
+.commandcode/
