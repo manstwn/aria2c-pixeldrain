@@ -750,12 +750,20 @@ async function startTouchForce() {
 async function stopTouch() {
   const btn = document.getElementById('btnStopTouch');
   if (btn) btn.disabled = true;
+
+  // Optimistically clear running status immediately to prevent frozen UI
+  if (touchStatus) {
+    touchStatus.isRunning = false;
+    touchStatus.currentFile = null;
+    touchStatus.mode = 'idle';
+    renderTouchStatus();
+  }
+
   try {
     const res = await fetch('/api/touch/stop', { method: 'POST' });
     const data = await res.json();
     if (data.success) {
-      showToast('🛑 Touch process cancellation requested.', 'warn');
-      setTimeout(fetchTouchStatus, 500);
+      showToast('🛑 Touch process cancelled and cleared.', 'warn');
     } else {
       showToast(data.message || 'Failed to stop touch', 'error');
     }
@@ -763,6 +771,7 @@ async function stopTouch() {
     showToast('Error requesting touch stop', 'error');
   } finally {
     if (btn) btn.disabled = false;
+    await fetchTouchStatus();
   }
 }
 

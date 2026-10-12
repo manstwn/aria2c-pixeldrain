@@ -7,10 +7,11 @@ const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 
 // Global Touch Engine State
 let activeHttpStream = null;
+let currentAbortController = null;
 const touchState = {
   isRunning: false,
   isAborted: false,
-  mode: 'idle', // 'idle' | 'batch' | 'single'
+  mode: 'idle', // 'idle' | 'batch' | 'single' | 'selected'
   startedAt: null,
   completedAt: null,
   totalEligible: 0,
@@ -39,7 +40,16 @@ function addTouchLog(message, type = 'info') {
 }
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise(resolve => {
+    const timer = setTimeout(resolve, ms);
+    const checkInterval = setInterval(() => {
+      if (touchState.isAborted) {
+        clearTimeout(timer);
+        clearInterval(checkInterval);
+        resolve();
+      }
+    }, 100);
+  });
 }
 
 function extractSourceUrl(file) {
@@ -90,6 +100,9 @@ async function touchFileRecord(file, options = {}, internal = false) {
   const pageUrl = file.download_url || `https://pixeldrain.com/u/${file.pixeldrain_id}`;
   const directFileUrl = `https://pixeldrain.com/api/file/${file.pixeldrain_id}`;
 
+  const abortController = new AbortController();
+  currentAbortController = abortController;
+
   try {
     if (touchState.isAborted) {
       addTouchLog(`Touch aborted before starting ${filename}`, 'warn');
@@ -99,17 +112,27 @@ async function touchFileRecord(file, options = {}, internal = false) {
     let fileSize = file.metadata && file.metadata.size_bytes ? file.metadata.size_bytes : 0;
     if (!fileSize && file.pixeldrain_id) {
       try {
-        const infoRes = await axios.get(`https://pixeldrain.com/api/file/${file.pixeldrain_id}/info`, { timeout: 10000 });
+        const infoRes = await axios.get(`https://pixeldrain.com/api/file/${file.pixeldrain_id}/info`, {
+          timeout: 10000,
+          signal: abortController.signal
+        });
         if (infoRes.data && infoRes.data.size) {
           fileSize = infoRes.data.size;
         }
       } catch (e) {
+        if (touchState.isAborted) {
+          return { success: false, status: 'ABORTED', file };
+        }
         if (e.response && e.response.status === 404) {
           const updated = db.updateFile(file.id, { status: 'DEAD' });
           addTouchLog(`❌ Touch FAILED (404 Not Found) for "${filename}". Marked DEAD.`, 'error');
           return { success: false, status: 'DEAD', file: updated };
         }
       }
+    }
+
+    if (touchState.isAborted) {
+      return { success: false, status: 'ABORTED', file };
     }
 
     const targetBytes = fileSize > 0 ? Math.ceil(fileSize * 0.15) : 1024;
@@ -153,8 +176,14 @@ async function touchFileRecord(file, options = {}, internal = false) {
       headers,
       timeout: timeoutMs,
       responseType: 'stream',
+      signal: abortController.signal,
       validateStatus: s => s < 500
     });
+
+    if (touchState.isAborted) {
+      try { response.data.destroy(new Error('Touch aborted by user.')); } catch (e) {}
+      return { success: false, status: 'ABORTED', file };
+    }
 
     if (response.status === 404) {
       const updated = db.updateFile(file.id, { status: 'DEAD' });
@@ -166,6 +195,9 @@ async function touchFileRecord(file, options = {}, internal = false) {
     if ((response.status === 403 || response.status === 429) && !options.retried) {
       addTouchLog(`⚠️ HTTP ${response.status} rate-limited for "${filename}". Backing off 5s before retry...`, 'warn');
       await sleep(5000);
+      if (touchState.isAborted) {
+        return { success: false, status: 'ABORTED', file };
+      }
       return touchFileRecord(file, { ...options, retried: true }, internal);
     }
 
@@ -181,10 +213,18 @@ async function touchFileRecord(file, options = {}, internal = false) {
     const startTime = Date.now();
 
     await new Promise((resolve, reject) => {
+      let settled = false;
+      const done = (err) => {
+        if (settled) return;
+        settled = true;
+        if (err) reject(err);
+        else resolve();
+      };
+
       response.data.on('data', chunk => {
         if (touchState.isAborted) {
-          try { response.data.destroy(); } catch (e) {}
-          return reject(new Error('Touch aborted by user.'));
+          try { response.data.destroy(new Error('Touch aborted by user.')); } catch (e) {}
+          return done(new Error('Touch aborted by user.'));
         }
 
         downloadedBytes += chunk.length;
@@ -211,18 +251,27 @@ async function touchFileRecord(file, options = {}, internal = false) {
         }
       });
 
-      response.data.on('end', resolve);
+      response.data.on('end', () => done());
+      response.data.on('close', () => {
+        if (touchState.isAborted) {
+          return done(new Error('Touch aborted by user.'));
+        }
+        done();
+      });
       response.data.on('error', err => {
-        if (touchState.isAborted) return reject(new Error('Touch aborted by user.'));
-        reject(err);
+        done(err);
       });
     });
 
     activeHttpStream = null;
 
+    if (touchState.isAborted) {
+      return { success: false, status: 'ABORTED', file };
+    }
+
     // Verify transferred bytes actually exceeded the required 10% threshold
     const minRequiredBytes = fileSize > 0 ? Math.floor(fileSize * 0.10) : 512;
-    if (downloadedBytes < minRequiredBytes && !touchState.isAborted) {
+    if (downloadedBytes < minRequiredBytes) {
       throw new Error(`Incomplete download: stream closed after ${(downloadedBytes / (1024 * 1024)).toFixed(1)} MB (less than 10% threshold of ${(minRequiredBytes / (1024 * 1024)).toFixed(1)} MB)`);
     }
 
@@ -247,11 +296,13 @@ async function touchFileRecord(file, options = {}, internal = false) {
     addTouchLog(`⚠️ Touch error for "${filename}": ${err.message}`, 'error');
     return { success: false, status: file.status, file };
   } finally {
+    activeHttpStream = null;
+    currentAbortController = null;
     if (singleLockAcquired) {
       touchState.isRunning = false;
       touchState.completedAt = new Date().toISOString();
       touchState.currentFile = null;
-      activeHttpStream = null;
+      touchState.mode = 'idle';
     }
   }
 }
@@ -351,6 +402,11 @@ async function touchAllFiles(options = false) {
       const file = eligibleFiles[i];
 
       const result = await touchFileRecord(file, {}, true);
+      if (touchState.isAborted) {
+        addTouchLog(`🛑 Touch batch stopped by user after ${i + 1} item(s).`, 'warn');
+        break;
+      }
+
       if (result && result.success) {
         touchState.touchedCount++;
       } else if (result && result.status === 'DEAD') {
@@ -368,7 +424,9 @@ async function touchAllFiles(options = false) {
     touchState.isRunning = false;
     touchState.completedAt = new Date().toISOString();
     touchState.currentFile = null;
+    touchState.mode = 'idle';
     activeHttpStream = null;
+    currentAbortController = null;
 
     addTouchLog(`🏁 Touch batch complete! Touched: ${touchState.touchedCount} | Dead: ${touchState.deadCount} | Errors: ${touchState.errorCount}`, 'info');
   }
@@ -408,22 +466,35 @@ function startTouchAll(options = false) {
 }
 
 /**
- * Abort active touch process immediately
+ * Abort active touch process immediately and clear all queues
  */
 function stopTouch() {
-  if (!touchState.isRunning) {
-    return { success: false, message: 'No touch job is currently running.' };
-  }
-
   touchState.isAborted = true;
-  if (activeHttpStream && typeof activeHttpStream.destroy === 'function') {
+  touchState.isRunning = false;
+  touchState.mode = 'idle';
+  touchState.currentFile = null;
+  touchState.totalEligible = 0;
+  touchState.currentIndex = 0;
+  touchState.completedAt = new Date().toISOString();
+
+  if (currentAbortController) {
     try {
-      activeHttpStream.destroy();
+      currentAbortController.abort();
     } catch (e) {}
+    currentAbortController = null;
   }
 
-  addTouchLog('Touch cancellation requested by user.', 'warn');
-  return { success: true, message: 'Touch cancellation requested.' };
+  if (activeHttpStream) {
+    try {
+      if (typeof activeHttpStream.destroy === 'function') {
+        activeHttpStream.destroy(new Error('Touch aborted by user.'));
+      }
+    } catch (e) {}
+    activeHttpStream = null;
+  }
+
+  addTouchLog('🛑 Touch process cancelled and cleared by user.', 'warn');
+  return { success: true, message: 'Touch cancelled and cleared successfully.' };
 }
 
 /**
