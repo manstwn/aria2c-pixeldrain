@@ -259,11 +259,16 @@ async function touchFileRecord(file, options = {}, internal = false) {
 /**
  * Filter all records that require touching
  */
-function getEligibleFiles(force = false) {
+function getEligibleFiles(force = false, fileIds = null) {
   const files = db.getAllFiles();
   const now = Date.now();
   const touchIntervalDays = getTouchIntervalDays();
   const intervalMs = touchIntervalDays * 24 * 60 * 60 * 1000;
+
+  if (Array.isArray(fileIds) && fileIds.length > 0) {
+    const idSet = new Set(fileIds);
+    return files.filter(file => idSet.has(file.id) && file.status !== 'DEAD');
+  }
 
   return files.filter(file => {
     if (file.status === 'DEAD') return false;
@@ -278,9 +283,20 @@ function getEligibleFiles(force = false) {
 
 /**
  * Touch all eligible files sequentially.
- * @param {boolean} force - If true, bypasses the interval check
+ * @param {boolean|object} options - If boolean: force flag. If object: { force, fileIds }
  */
-async function touchAllFiles(force = false) {
+async function touchAllFiles(options = false) {
+  let force = false;
+  let fileIds = null;
+  if (typeof options === 'boolean') {
+    force = options;
+  } else if (options && typeof options === 'object') {
+    force = Boolean(options.force);
+    if (Array.isArray(options.fileIds)) {
+      fileIds = options.fileIds;
+    }
+  }
+
   if (touchState.isRunning) {
     addTouchLog('Touch batch is already running. Cannot start another.', 'warn');
     return {
@@ -291,13 +307,13 @@ async function touchAllFiles(force = false) {
     };
   }
 
-  const eligibleFiles = getEligibleFiles(force);
-  const totalFiles = db.getAllFiles().length;
+  const eligibleFiles = getEligibleFiles(force, fileIds);
+  const totalFiles = fileIds ? eligibleFiles.length : db.getAllFiles().length;
   const touchIntervalDays = getTouchIntervalDays();
 
   touchState.isRunning = true;
   touchState.isAborted = false;
-  touchState.mode = 'batch';
+  touchState.mode = fileIds ? 'selected' : 'batch';
   touchState.startedAt = new Date().toISOString();
   touchState.completedAt = null;
   touchState.totalEligible = eligibleFiles.length;
@@ -307,12 +323,20 @@ async function touchAllFiles(force = false) {
   touchState.errorCount = 0;
   touchState.skippedCount = totalFiles - eligibleFiles.length;
 
-  addTouchLog(`🚀 Starting touch batch: ${eligibleFiles.length} file(s) eligible (${touchIntervalDays}+ days since touch) out of ${totalFiles} total.`, 'info');
+  if (fileIds) {
+    addTouchLog(`🚀 Starting bulk touch for ${eligibleFiles.length} selected file(s).`, 'info');
+  } else {
+    addTouchLog(`🚀 Starting touch batch: ${eligibleFiles.length} file(s) eligible (${touchIntervalDays}+ days since touch) out of ${totalFiles} total.`, 'info');
+  }
 
   if (eligibleFiles.length === 0) {
     touchState.isRunning = false;
     touchState.completedAt = new Date().toISOString();
-    addTouchLog(`All files have been touched within the last ${touchIntervalDays} days. Nothing to do today.`, 'info');
+    if (fileIds) {
+      addTouchLog('No live files found among selected records.', 'warn');
+    } else {
+      addTouchLog(`All files have been touched within the last ${touchIntervalDays} days. Nothing to do today.`, 'info');
+    }
     return { touchedCount: 0, deadCount: 0, total: totalFiles, skipped: totalFiles };
   }
 
@@ -360,8 +384,9 @@ async function touchAllFiles(force = false) {
 
 /**
  * Start touch batch asynchronously in background without blocking the caller.
+ * @param {boolean|object} options - If boolean: force flag. If object: { force, fileIds }
  */
-function startTouchAll(force = false) {
+function startTouchAll(options = false) {
   if (touchState.isRunning) {
     return {
       success: false,
@@ -371,7 +396,7 @@ function startTouchAll(force = false) {
   }
 
   // Fire and forget
-  touchAllFiles(force).catch(err => {
+  touchAllFiles(options).catch(err => {
     addTouchLog(`Touch batch error: ${err.message}`, 'error');
   });
 

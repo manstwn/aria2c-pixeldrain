@@ -8,6 +8,8 @@ let searchQuery = '';
 let currentPage = 1;
 const PAGE_SIZE = 25;
 let autoScrollLogs = true;
+const selectedFileIds = new Set();
+let lastCheckedIndex = null;
 
 // Utility formatting
 function escapeHtml(str) {
@@ -291,6 +293,8 @@ function renderTouchStatus() {
   if (touchStatus.recentLogs && Array.isArray(touchStatus.recentLogs)) {
     renderLogs(touchStatus.recentLogs);
   }
+
+  updateSelectionUI();
 }
 
 // Render Daemon Logs Box
@@ -347,6 +351,197 @@ function changePage(delta) {
   renderLedger();
 }
 
+function getFilteredFiles() {
+  const now = Date.now();
+  const intervalDays = (touchStatus && touchStatus.metrics && touchStatus.metrics.intervalDays) ? touchStatus.metrics.intervalDays : 20;
+
+  return allFiles.filter(file => {
+    const isDead = file.status === 'DEAD';
+    const lastStr = file.last_touched || file.created_at;
+    const ageDays = (now - (lastStr ? new Date(lastStr).getTime() : 0)) / 86400000;
+
+    if (currentFilter === 'due' && (isDead || ageDays < intervalDays)) return false;
+    if (currentFilter === 'urgent' && (isDead || ageDays < 45)) return false;
+    if (currentFilter === 'live' && isDead) return false;
+    if (currentFilter === 'dead' && !isDead) return false;
+
+    if (searchQuery) {
+      const name = (file.custom_name || file.filename || file.original_filename || '').toLowerCase();
+      const pid = (file.pixeldrain_id || '').toLowerCase();
+      if (!name.includes(searchQuery) && !pid.includes(searchQuery)) return false;
+    }
+
+    return true;
+  });
+}
+
+function getCurrentPageFiles() {
+  const filtered = getFilteredFiles();
+  const maxPage = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const validPage = Math.min(Math.max(1, currentPage), maxPage);
+  const startIdx = (validPage - 1) * PAGE_SIZE;
+  return filtered.slice(startIdx, startIdx + PAGE_SIZE);
+}
+
+function updateSelectionUI() {
+  const count = selectedFileIds.size;
+  const bulkBar = document.getElementById('bulkActionBar');
+  const btnHeroSelected = document.getElementById('btnStartTouchSelected');
+  const heroCount = document.getElementById('heroSelectedCount');
+  const bulkText = document.getElementById('bulkSelectedText');
+  const bulkTouchCount = document.getElementById('bulkTouchCount');
+  const bulkFilteredCount = document.getElementById('bulkFilteredCount');
+  const masterCb = document.getElementById('selectAllCheckbox');
+  const isRunning = Boolean(touchStatus && touchStatus.isRunning);
+
+  if (count > 0) {
+    if (bulkBar) bulkBar.style.display = 'flex';
+    if (btnHeroSelected) {
+      btnHeroSelected.style.display = 'inline-flex';
+      btnHeroSelected.disabled = isRunning;
+      btnHeroSelected.style.opacity = isRunning ? '0.5' : '1';
+    }
+    if (heroCount) heroCount.textContent = count;
+    if (bulkText) bulkText.textContent = `${count} file${count > 1 ? 's' : ''} selected`;
+    if (bulkTouchCount) bulkTouchCount.textContent = count;
+    if (bulkFilteredCount) bulkFilteredCount.textContent = getFilteredFiles().length;
+    const btnBulk = document.getElementById('btnBulkTouch');
+    if (btnBulk) btnBulk.disabled = isRunning;
+  } else {
+    if (bulkBar) bulkBar.style.display = 'none';
+    if (btnHeroSelected) btnHeroSelected.style.display = 'none';
+  }
+
+  if (masterCb) {
+    const pageFiles = getCurrentPageFiles();
+    if (pageFiles.length === 0) {
+      masterCb.checked = false;
+      masterCb.indeterminate = false;
+      masterCb.disabled = true;
+    } else {
+      masterCb.disabled = false;
+      let pageSelected = 0;
+      pageFiles.forEach(f => {
+        if (selectedFileIds.has(f.id)) pageSelected++;
+      });
+      if (pageSelected === pageFiles.length) {
+        masterCb.checked = true;
+        masterCb.indeterminate = false;
+      } else if (pageSelected > 0) {
+        masterCb.checked = false;
+        masterCb.indeterminate = true;
+      } else {
+        masterCb.checked = false;
+        masterCb.indeterminate = false;
+      }
+    }
+  }
+
+  document.querySelectorAll('#touchTableBody tr').forEach(tr => {
+    const cb = tr.querySelector('.touch-select-cb');
+    if (cb && cb.dataset.id) {
+      const isSel = selectedFileIds.has(cb.dataset.id);
+      cb.checked = isSel;
+      tr.classList.toggle('row-selected', isSel);
+    }
+  });
+}
+
+function handleRowCheckbox(event, fileId, index) {
+  const isChecked = event.target.checked;
+  const pageFiles = getCurrentPageFiles();
+
+  if (event.shiftKey && lastCheckedIndex !== null) {
+    const start = Math.min(lastCheckedIndex, index);
+    const end = Math.max(lastCheckedIndex, index);
+    for (let i = start; i <= end; i++) {
+      const f = pageFiles[i];
+      if (f) {
+        if (isChecked) {
+          selectedFileIds.add(f.id);
+        } else {
+          selectedFileIds.delete(f.id);
+        }
+      }
+    }
+  } else {
+    if (isChecked) {
+      selectedFileIds.add(fileId);
+    } else {
+      selectedFileIds.delete(fileId);
+    }
+  }
+
+  lastCheckedIndex = index;
+  updateSelectionUI();
+}
+
+function toggleSelectAllPage(checked) {
+  const pageFiles = getCurrentPageFiles();
+  pageFiles.forEach(f => {
+    if (checked) {
+      selectedFileIds.add(f.id);
+    } else {
+      selectedFileIds.delete(f.id);
+    }
+  });
+  lastCheckedIndex = null;
+  updateSelectionUI();
+}
+
+function selectAllFiltered() {
+  const filtered = getFilteredFiles();
+  filtered.forEach(f => {
+    selectedFileIds.add(f.id);
+  });
+  updateSelectionUI();
+  showToast(`Selected all ${filtered.length} matching files across pages`, 'info');
+}
+
+function clearSelection() {
+  selectedFileIds.clear();
+  lastCheckedIndex = null;
+  updateSelectionUI();
+}
+
+async function startTouchSelected() {
+  if (touchStatus && touchStatus.isRunning) {
+    showToast('Touch daemon is already running. Please wait.', 'warn');
+    return;
+  }
+  if (selectedFileIds.size === 0) {
+    showToast('No files selected', 'warn');
+    return;
+  }
+
+  const ids = Array.from(selectedFileIds);
+  const btnHero = document.getElementById('btnStartTouchSelected');
+  const btnBulk = document.getElementById('btnBulkTouch');
+  if (btnHero) btnHero.disabled = true;
+  if (btnBulk) btnBulk.disabled = true;
+
+  try {
+    const res = await fetch('/api/touch/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileIds: ids })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`🚀 Bulk touch started for ${ids.length} selected file(s)!`, 'success');
+      clearSelection();
+      fetchTouchStatus();
+    } else {
+      showToast(data.message || 'Touch batch already running', 'warn');
+    }
+  } catch (err) {
+    showToast('Failed to start bulk touch', 'error');
+  } finally {
+    if (btnHero) btnHero.disabled = false;
+    if (btnBulk) btnBulk.disabled = false;
+  }
+}
+
 // Render Retention Ledger Table
 function renderLedger() {
   const tbody = document.getElementById('touchTableBody');
@@ -381,25 +576,7 @@ function renderLedger() {
   document.getElementById('filterDeadCount').textContent = deadCount;
 
   // Filter items
-  let filtered = allFiles.filter(file => {
-    const isDead = file.status === 'DEAD';
-    const lastStr = file.last_touched || file.created_at;
-    const ageDays = (now - (lastStr ? new Date(lastStr).getTime() : 0)) / 86400000;
-
-    if (currentFilter === 'due' && (isDead || ageDays < intervalDays)) return false;
-    if (currentFilter === 'urgent' && (isDead || ageDays < 45)) return false;
-    if (currentFilter === 'live' && isDead) return false;
-    if (currentFilter === 'dead' && !isDead) return false;
-
-    if (searchQuery) {
-      const name = (file.custom_name || file.filename || file.original_filename || '').toLowerCase();
-      const pid = (file.pixeldrain_id || '').toLowerCase();
-      if (!name.includes(searchQuery) && !pid.includes(searchQuery)) return false;
-    }
-
-    return true;
-  });
-
+  const filtered = getFilteredFiles();
   const totalFiltered = filtered.length;
   const maxPage = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
   if (currentPage > maxPage) currentPage = maxPage;
@@ -417,11 +594,13 @@ function renderLedger() {
   document.getElementById('btnNextPage').disabled = (currentPage >= maxPage);
 
   if (pageItems.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 32px; color: var(--text-muted);">No matching file records found.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 32px; color: var(--text-muted);">No matching file records found.</td></tr>`;
+    updateSelectionUI();
     return;
   }
 
-  tbody.innerHTML = pageItems.map(file => {
+  tbody.innerHTML = pageItems.map((file, index) => {
+    const isSelected = selectedFileIds.has(file.id);
     const name = file.custom_name || file.filename || file.original_filename || 'Unknown file';
     const sizeBytes = file.metadata && file.metadata.size_bytes ? file.metadata.size_bytes : 0;
     const sizeFormatted = sizeBytes > 0 ? formatBytes(sizeBytes) : (file.metadata?.size_formatted || 'N/A');
@@ -471,7 +650,12 @@ function renderLedger() {
       buttonTitle = 'File returned 404 from Pixeldrain (already expired)';
     }
 
-    return `<tr>
+    return `<tr class="${isSelected ? 'row-selected' : ''}">
+      <td style="text-align: center;">
+        <input type="checkbox" class="touch-select-cb" data-id="${file.id}" ${isSelected ? 'checked' : ''}
+          onclick="handleRowCheckbox(event, '${file.id}', ${index})"
+          title="Select ${escapeHtml(name)}">
+      </td>
       <td>
         <div style="display: flex; flex-direction: column; gap: 4px;">
           <strong style="color: #f1f5f9; font-size: 0.9rem; word-break: break-all;">${escapeHtml(name)}</strong>
@@ -509,6 +693,8 @@ function renderLedger() {
       </td>
     </tr>`;
   }).join('');
+
+  updateSelectionUI();
 }
 
 // User Actions

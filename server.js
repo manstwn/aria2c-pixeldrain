@@ -375,12 +375,13 @@ app.post('/api/files/:id/touch', auth.requireAuth, async (req, res) => {
 app.post('/api/files/touch-all', auth.requireAuth, async (req, res) => {
   try {
     const force = req.query.force === 'true' || req.body?.force === true;
+    const fileIds = Array.isArray(req.body?.fileIds) ? req.body.fileIds : null;
     const asyncMode = req.query.async === 'true' || req.body?.async === true;
     if (asyncMode) {
-      const result = touchManager.startTouchAll(force);
+      const result = touchManager.startTouchAll({ force, fileIds });
       return res.json(result);
     }
-    const results = await touchManager.touchAllFiles(force);
+    const results = await touchManager.touchAllFiles({ force, fileIds });
     res.json({ success: true, results, count: results.touchedCount });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -399,7 +400,8 @@ app.get('/api/touch/status', auth.requireAuth, (req, res) => {
 app.post('/api/touch/start', auth.requireAuth, (req, res) => {
   try {
     const force = req.query.force === 'true' || req.body?.force === true;
-    const result = touchManager.startTouchAll(force);
+    const fileIds = Array.isArray(req.body?.fileIds) ? req.body.fileIds : null;
+    const result = touchManager.startTouchAll({ force, fileIds });
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });

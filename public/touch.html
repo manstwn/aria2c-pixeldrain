@@ -228,6 +228,77 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
+    /* Bulk Action Bar & Row Selection */
+    .bulk-action-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 16px;
+      margin-bottom: 14px;
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(16, 185, 129, 0.12));
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      border-radius: var(--radius-md);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+      flex-wrap: wrap;
+    }
+    .bulk-action-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .bulk-selected-count-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #93c5fd;
+      font-family: var(--font-mono);
+      background: rgba(30, 58, 138, 0.5);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(96, 165, 250, 0.3);
+    }
+    .bulk-subtext {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+    .bulk-action-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn-bulk-subaction {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #cbd5e1;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 0.78rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .btn-bulk-subaction:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+    }
+    .touch-select-cb {
+      width: 17px;
+      height: 17px;
+      cursor: pointer;
+      accent-color: #3b82f6;
+      vertical-align: middle;
+    }
+    .ledger-table tbody tr.row-selected {
+      background: rgba(59, 130, 246, 0.09) !important;
+    }
+    .ledger-table tbody tr.row-selected:hover {
+      background: rgba(59, 130, 246, 0.15) !important;
+    }
   </style>
 </head>
 <body class="dark-theme">
@@ -361,6 +432,10 @@
           </div>
 
           <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <button type="button" id="btnStartTouchSelected" class="btn-touch-action" style="display: none; background: linear-gradient(135deg, #10b981, #059669); color: #fff; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);" onclick="startTouchSelected()">
+              <span class="material-symbols-outlined" style="font-size: 18px;">checklist</span>
+              <span>Touch Selected (<span id="heroSelectedCount">0</span>)</span>
+            </button>
             <button type="button" id="btnStartTouchDue" class="btn-touch-action primary" onclick="startTouchDue()">
               <span class="material-symbols-outlined" style="font-size: 18px;">bolt</span>
               <span>Touch Due Files (<span id="btnDueCount">0</span>)</span>
@@ -468,15 +543,41 @@
           </div>
         </div>
 
+        <!-- Bulk Selection Action Bar -->
+        <div id="bulkActionBar" class="bulk-action-bar" style="display: none;">
+          <div class="bulk-action-left">
+            <span class="bulk-selected-count-badge">
+              <span class="material-symbols-outlined" style="font-size: 16px;">check_circle</span>
+              <span id="bulkSelectedText">0 files selected</span>
+            </span>
+            <span class="bulk-subtext">Persists across pagination</span>
+          </div>
+          <div class="bulk-action-right">
+            <button type="button" class="btn-bulk-subaction" onclick="selectAllFiltered()">
+              Select all <span id="bulkFilteredCount">0</span> filtered
+            </button>
+            <button type="button" class="btn-bulk-subaction" onclick="clearSelection()">
+              Clear selection
+            </button>
+            <button type="button" id="btnBulkTouch" class="btn-touch-action primary" style="padding: 6px 14px; font-size: 0.82rem;" onclick="startTouchSelected()">
+              <span class="material-symbols-outlined" style="font-size: 16px;">bolt</span>
+              <span>Touch Selected (<span id="bulkTouchCount">0</span>)</span>
+            </button>
+          </div>
+        </div>
+
         <!-- Ledger Table -->
         <div class="ledger-table-container">
           <table class="ledger-table" id="touchTable">
             <thead>
               <tr>
-                <th style="width: 32%;">File / Title</th>
+                <th style="width: 44px; text-align: center;">
+                  <input type="checkbox" id="selectAllCheckbox" class="touch-select-cb" onchange="toggleSelectAllPage(this.checked)" title="Select all on this page">
+                </th>
+                <th style="width: 30%;">File / Title</th>
                 <th style="width: 10%;">Size</th>
-                <th style="width: 13%;">File Age</th>
-                <th style="width: 15%;">Last Touched</th>
+                <th style="width: 12%;">File Age</th>
+                <th style="width: 14%;">Last Touched</th>
                 <th style="width: 12%;">60d Expiry</th>
                 <th style="width: 8%;">Status</th>
                 <th style="width: 10%; text-align: right;">Action</th>
@@ -484,7 +585,7 @@
             </thead>
             <tbody id="touchTableBody">
               <tr>
-                <td colspan="7" style="text-align: center; padding: 32px; color: var(--text-muted);">
+                <td colspan="8" style="text-align: center; padding: 32px; color: var(--text-muted);">
                   Loading file records...
                 </td>
               </tr>
