@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PixelTouch | Cloud Retention & Background Touch Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Touch Manager Specific Styles */
+    .touch-hero-card {
+      margin-bottom: 24px;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .touch-hero-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, #3b82f6, #10b981, #f59e0b);
+    }
+    .touch-hero-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .touch-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+    }
+    .touch-status-badge.running {
+      background: rgba(245, 158, 11, 0.18);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: #fbbf24;
+      box-shadow: 0 0 16px rgba(245, 158, 11, 0.25);
+    }
+    .touch-status-badge.idle {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #34d399;
+    }
+    .touch-progress-container {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: var(--radius-md);
+      padding: 18px;
+      margin-top: 14px;
+    }
+    .touch-progress-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 0.85rem;
+      font-family: var(--font-mono);
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .touch-progress-track {
+      height: 12px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+    .touch-progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6, #10b981);
+      border-radius: 999px;
+      transition: width 0.3s ease;
+      position: relative;
+    }
+    .touch-progress-bar.animated::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background-image: linear-gradient(
+        -45deg,
+        rgba(255, 255, 255, 0.2) 25%,
+        transparent 25%,
+        transparent 50%,
+        rgba(255, 255, 255, 0.2) 50%,
+        rgba(255, 255, 255, 0.2) 75%,
+        transparent 75%,
+        transparent
+      );
+      background-size: 24px 24px;
+      animation: progress-stripes 1s linear infinite;
+    }
+    @keyframes progress-stripes {
+      0% { background-position: 0 0; }
+      100% { background-position: 24px 0; }
+    }
+    .touch-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .touch-stat-card {
+      padding: 16px;
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .touch-stat-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+    }
+    .touch-stat-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      color: var(--text-primary);
+    }
+    .touch-stat-desc {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .urgency-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+    .urgency-badge.safe {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .urgency-badge.warning {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .urgency-badge.danger {
+      background: rgba(239, 68, 68, 0.18);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      animation: pulse 2s infinite;
+    }
+    .urgency-badge.dead {
+      background: rgba(100, 116, 139, 0.2);
+      color: #94a3b8;
+      border: 1px solid rgba(100, 116, 139, 0.3);
+    }
+    .touch-log-box {
+      height: 220px;
+      overflow-y: auto;
+      background: rgba(5, 10, 20, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      line-height: 1.6;
+      color: #94a3b8;
+    }
+    .touch-log-line {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .touch-log-time {
+      color: #64748b;
+      flex-shrink: 0;
+    }
+    .touch-log-line.success .touch-log-msg { color: #34d399; }
+    .touch-log-line.warn .touch-log-msg { color: #fbbf24; }
+    .touch-log-line.error .touch-log-msg { color: #f87171; }
+    .touch-log-line.info .touch-log-msg { color: #cbd5e1; }
+    .btn-touch-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+      font-family: var(--font-sans);
+    }
+    .btn-touch-action.primary {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+    }
+    .btn-touch-action.primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      transform: translateY(-1px);
+    }
+    .btn-touch-action.danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+    }
+    .btn-touch-action.danger:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.25);
+    }
+    .btn-touch-action:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body class="dark-theme">
+
+  <!-- AUTH PIN OVERLAY -->
+  <div id="authOverlay" class="auth-overlay hidden">
+    <div class="auth-card glass-panel">
+      <div class="auth-header">
+        <div class="brand-icon">
+          <span class="material-symbols-outlined" style="font-size: 32px;">schedule</span>
+        </div>
+        <h2>PixelTouch Retention</h2>
+        <p>Enter Admin PIN to access Touch Manager</p>
+      </div>
+
+      <form id="pinForm" onsubmit="handlePinSubmit(event)">
+        <div class="pin-display">
+          <div class="pin-dots">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </div>
+          <input type="password" id="pinInput" maxlength="12" autofocus autocomplete="off" placeholder="Enter PIN">
+        </div>
+
+        <div id="authError" class="auth-error hidden">Invalid PIN code. Please try again.</div>
+
+        <div class="keypad">
+          <button type="button" onclick="appendPin('1')">1</button>
+          <button type="button" onclick="appendPin('2')">2</button>
+          <button type="button" onclick="appendPin('3')">3</button>
+          <button type="button" onclick="appendPin('4')">4</button>
+          <button type="button" onclick="appendPin('5')">5</button>
+          <button type="button" onclick="appendPin('6')">6</button>
+          <button type="button" onclick="appendPin('7')">7</button>
+          <button type="button" onclick="appendPin('8')">8</button>
+          <button type="button" onclick="appendPin('9')">9</button>
+          <button type="button" class="btn-secondary" onclick="clearPin()">C</button>
+          <button type="button" onclick="appendPin('0')">0</button>
+          <button type="submit" class="btn-primary">↵</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MAIN DASHBOARD CONTENT -->
+  <div id="mainDashboard">
+
+    <!-- TOP NAVIGATION BAR -->
+    <header class="app-topbar">
+      <div class="header-left">
+        <a href="/" class="brand-badge-container">
+          <div class="brand-icon-mini glow-blue">
+            <span class="material-symbols-outlined" style="font-size: 20px;">schedule</span>
+          </div>
+          <div class="brand-text-col">
+            <span class="brand-title">PixelTouch</span>
+            <span class="brand-subtitle">Touch Manager</span>
+          </div>
+        </a>
+
+        <nav class="header-nav-links">
+          <a href="/" class="header-nav-link">
+            <span class="material-symbols-outlined" style="font-size: 18px;">dashboard</span>
+            <span>Command</span>
+          </a>
+          <a href="/gallery" class="header-nav-link">
+            <span class="material-symbols-outlined" style="font-size: 18px;">photo_library</span>
+            <span>Gallery</span>
+          </a>
+          <a href="/touch" class="header-nav-link active">
+            <span class="material-symbols-outlined" style="font-size: 18px;">schedule</span>
+            <span>Touch</span>
+          </a>
+        </nav>
+      </div>
+
+      <div class="header-right">
+        <!-- Resource metrics -->
+        <div class="topbar-metrics">
+          <div class="status-indicator-pill" id="storagePill" title="Total disk usage of ./data">
+            <span class="material-symbols-outlined status-pill-icon">hard_drive</span>
+            <span id="storageText">0 MB</span>
+          </div>
+
+          <div class="status-indicator-pill" id="dbStatusPill" title="Database connection status">
+            <span class="material-symbols-outlined status-pill-icon">database</span>
+            <span id="dbStatusText">DB: ...</span>
+          </div>
+        </div>
+
+        <span class="topbar-divider" aria-hidden="true"></span>
+
+        <!-- Live service status -->
+        <div class="topbar-live">
+          <div class="status-indicator-pill sse-pill" title="Real-time SSE stream active">
+            <span class="status-dot online pulse-emerald"></span>
+            <span>SSE Live</span>
+          </div>
+
+          <button type="button" class="btn-lock" onclick="lockSession()" title="Lock Session / Logout">
+            <span class="material-symbols-outlined" style="font-size: 18px;">lock</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN BODY -->
+    <main class="dashboard-content">
+
+      <!-- HERO / LIVE BACKGROUND TOUCH CARD -->
+      <section class="glass-panel touch-hero-card" id="touchHeroCard">
+        <div class="touch-hero-header">
+          <div>
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+              <span id="touchStatusBadge" class="touch-status-badge idle">
+                <span class="status-dot online"></span>
+                <span id="touchStatusBadgeText">DAEMON IDLE / READY</span>
+              </span>
+              <span id="touchModeTag" style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">[Threshold: 20 Days]</span>
+            </div>
+            <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary); margin: 0;">
+              Cloud Expiry Prevention Engine
+            </h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin: 4px 0 0 0;">
+              Downloads 15% chunk per file from Pixeldrain to keep links active permanently beyond 60 days.
+            </p>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <button type="button" id="btnStartTouchDue" class="btn-touch-action primary" onclick="startTouchDue()">
+              <span class="material-symbols-outlined" style="font-size: 18px;">bolt</span>
+              <span>Touch Due Files (<span id="btnDueCount">0</span>)</span>
+            </button>
+            <button type="button" id="btnStartTouchForce" class="btn-touch-action" style="background: rgba(255,255,255,0.06); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.15);" onclick="startTouchForce()">
+              <span class="material-symbols-outlined" style="font-size: 18px;">restart_alt</span>
+              <span>Force Touch All</span>
+            </button>
+            <button type="button" id="btnStopTouch" class="btn-touch-action danger" style="display: none;" onclick="stopTouch()">
+              <span class="material-symbols-outlined" style="font-size: 18px;">stop_circle</span>
+              <span>Stop / Cancel</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ACTIVE RUNNING TASK BOX (Shown when isRunning == true) -->
+        <div id="activeTaskBox" class="touch-progress-container" style="display: none;">
+          <div class="touch-progress-meta">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="material-symbols-outlined" style="color: #fbbf24; font-size: 20px;">sync</span>
+              <strong id="activeFilename" style="color: #f8fafc; font-size: 0.95rem;">Downloading...</strong>
+              <a id="activePageLink" href="#" target="_blank" class="gofile-link-badge" title="Open on Pixeldrain" style="font-size: 0.75rem;">
+                <span id="activePixelId">...</span> ↗
+              </a>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span id="activeBatchProgress" style="color: #94a3b8;">File 1 of 1</span>
+              <span id="activeSpeed" style="color: #34d399; font-weight: 600;">0.0 MB/s</span>
+              <span id="activeEta" style="color: #60a5fa;">ETA: --</span>
+            </div>
+          </div>
+
+          <div class="touch-progress-track">
+            <div id="activeProgressBar" class="touch-progress-bar animated" style="width: 0%;"></div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 0.78rem; font-family: var(--font-mono); color: var(--text-muted);">
+            <div>
+              Transferred: <span id="activeTransferredBytes" style="color: var(--text-primary); font-weight: 600;">0 MB</span> / <span id="activeTargetBytes">0 MB</span> (15% Chunk)
+            </div>
+            <div>
+              Progress: <span id="activePercentText" style="color: #34d399; font-weight: 700;">0.0%</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- STATS SUMMARY CARDS -->
+      <div class="touch-stats-grid">
+        <div class="touch-stat-card">
+          <span class="touch-stat-label">Due For Touch</span>
+          <span class="touch-stat-value" id="statDueCount" style="color: #fbbf24;">0</span>
+          <span class="touch-stat-desc">Older than interval (<span id="statIntervalDays">20</span> days)</span>
+        </div>
+
+        <div class="touch-stat-card">
+          <span class="touch-stat-label">At Risk (Urgent)</span>
+          <span class="touch-stat-value" id="statRiskCount" style="color: #f87171;">0</span>
+          <span class="touch-stat-desc">>45 days (near 60d deletion)</span>
+        </div>
+
+        <div class="touch-stat-card">
+          <span class="touch-stat-label">Protected (Live)</span>
+          <span class="touch-stat-value" id="statLiveCount" style="color: #34d399;">0</span>
+          <span class="touch-stat-desc">Active Pixeldrain files</span>
+        </div>
+
+        <div class="touch-stat-card">
+          <span class="touch-stat-label">Dead / 404</span>
+          <span class="touch-stat-value" id="statDeadCount" style="color: #94a3b8;">0</span>
+          <span class="touch-stat-desc">Expired from cloud</span>
+        </div>
+
+        <div class="touch-stat-card">
+          <span class="touch-stat-label">Total Cloud Ledger</span>
+          <span class="touch-stat-value" id="statTotalCount" style="color: #60a5fa;">0</span>
+          <span class="touch-stat-desc">Registered file records</span>
+        </div>
+      </div>
+
+      <!-- RETENTION LEDGER SECTION -->
+      <section class="glass-panel" style="padding: 24px; margin-bottom: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 18px;">
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <h3 style="font-size: 1.1rem; font-weight: 700; margin: 0; color: var(--text-primary);">
+              File Retention Ledger
+            </h3>
+            <!-- Filter Tabs -->
+            <div class="tag-filter-bar" style="margin: 0;">
+              <button type="button" class="tag-filter-pill active" data-filter="all" onclick="setFilter('all')">All (<span id="filterAllCount">0</span>)</button>
+              <button type="button" class="tag-filter-pill" data-filter="due" onclick="setFilter('due')">⚡ Due (<span id="filterDueCount">0</span>)</button>
+              <button type="button" class="tag-filter-pill" data-filter="urgent" onclick="setFilter('urgent')">⚠️ Urgent (<span id="filterUrgentCount">0</span>)</button>
+              <button type="button" class="tag-filter-pill" data-filter="live" onclick="setFilter('live')">✅ Live (<span id="filterLiveCount">0</span>)</button>
+              <button type="button" class="tag-filter-pill" data-filter="dead" onclick="setFilter('dead')">❌ Dead (<span id="filterDeadCount">0</span>)</button>
+            </div>
+          </div>
+
+          <!-- Search Input -->
+          <div class="search-input-wrapper" style="max-width: 280px; width: 100%;">
+            <span class="material-symbols-outlined search-icon">search</span>
+            <input type="text" id="touchSearchInput" class="search-input" placeholder="Search filename or ID..." oninput="handleSearch()">
+          </div>
+        </div>
+
+        <!-- Ledger Table -->
+        <div class="ledger-table-container">
+          <table class="ledger-table" id="touchTable">
+            <thead>
+              <tr>
+                <th style="width: 38%;">File / Title</th>
+                <th style="width: 12%;">Size</th>
+                <th style="width: 16%;">Last Touched</th>
+                <th style="width: 14%;">60d Expiry</th>
+                <th style="width: 10%;">Status</th>
+                <th style="width: 10%; text-align: right;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="touchTableBody">
+              <tr>
+                <td colspan="6" style="text-align: center; padding: 32px; color: var(--text-muted);">
+                  Loading file records...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination Bar -->
+        <div class="ledger-footer-pagination" style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; flex-wrap: wrap; gap: 10px;">
+          <div style="font-size: 0.82rem; color: var(--text-muted); font-family: var(--font-mono);">
+            Showing <span id="pageStart">0</span> - <span id="pageEnd">0</span> of <span id="pageTotal">0</span> records
+          </div>
+          <div class="page-nav-buttons">
+            <button type="button" class="btn-page-nav" id="btnPrevPage" onclick="changePage(-1)">❮ Prev</button>
+            <span id="pageIndicator" style="font-size: 0.82rem; font-family: var(--font-mono); color: var(--text-primary); padding: 0 8px;">1 / 1</span>
+            <button type="button" class="btn-page-nav" id="btnNextPage" onclick="changePage(1)">Next ❯</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- LIVE TOUCH CONSOLE LOGS -->
+      <section class="glass-panel" style="padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="material-symbols-outlined" style="font-size: 18px; color: #60a5fa;">terminal</span>
+            <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700;">Live Daemon Console</h4>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <label style="font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px; cursor: pointer;">
+              <input type="checkbox" id="autoScrollCheck" checked style="accent-color: #3b82f6;"> Auto-scroll
+            </label>
+            <button type="button" onclick="clearLogs()" style="background: none; border: none; color: var(--text-muted); font-size: 0.75rem; cursor: pointer;">Clear</button>
+          </div>
+        </div>
+
+        <div id="touchLogBox" class="touch-log-box">
+          <div class="touch-log-line info">
+            <span class="touch-log-time">[Ready]</span>
+            <span class="touch-log-msg">PixelTouch Daemon Console initialized. Awaiting events...</span>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- MOBILE BOTTOM NAVIGATION -->
+    <nav class="mobile-bottom-nav">
+      <a href="/" class="mobile-nav-link">
+        <span class="material-symbols-outlined">dashboard</span>
+        <span>Command</span>
+      </a>
+      <a href="/gallery" class="mobile-nav-link">
+        <span class="material-symbols-outlined">photo_library</span>
+        <span>Gallery</span>
+      </a>
+      <a href="/touch" class="mobile-nav-link active">
+        <span class="material-symbols-outlined">schedule</span>
+        <span>Touch</span>
+      </a>
+    </nav>
+
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="touch.js"></script>
+</body>
+</html>

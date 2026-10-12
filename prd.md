@@ -53,7 +53,7 @@
 
 * **Schedule:** Executes every 24 hours at midnight via `node-cron` (`0 0 * * *`).
 * **Target Selection:** Reads persistent file records and filters for entries where `status !== "DEAD"` and `last_touched` (or `created_at`) is older than 30 days. Files touched within the last 30 days are skipped.
-* **Execution & Rate Limiting:** Iterates through eligible items, downloading a 12% chunk (exceeding Pixeldrain's 10% activity threshold to reset the 60-day expiration timer). Introduces a randomized delay (1–3 seconds) between files to prevent rate limits.
+* **Execution & Rate Limiting:** Iterates through eligible items, downloading a 15% chunk and fully consuming the stream (exceeding Pixeldrain's 10% activity threshold to reset the 60-day expiration timer). Introduces a randomized delay (1–3 seconds) between files to prevent rate limits.
 * **State Updates:**
 * **Success (200 / 206 Partial Content):** Updates `last_touched` timestamp and ensures `status = "LIVE"`.
 * **Failure (404 Not Found):** Updates `status` to `"DEAD"`.

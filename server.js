@@ -136,8 +136,9 @@ app.get('/api/stream', (req, res) => {
       const files = db.getAllFiles();
       const dataSizeBytes = getFolderSize(path.join(__dirname, 'data'));
       const dataSizeFormatted = formatBytes(dataSizeBytes);
+      const touchStatus = touchManager.getTouchStatus();
 
-      res.write(`data: ${JSON.stringify({ downloads, conn, files, dataSizeFormatted, dataSizeBytes })}\n\n`);
+      res.write(`data: ${JSON.stringify({ downloads, conn, files, dataSizeFormatted, dataSizeBytes, touchStatus })}\n\n`);
     } catch (err) {}
   };
 
@@ -371,8 +372,41 @@ app.post('/api/files/:id/touch', auth.requireAuth, async (req, res) => {
 app.post('/api/files/touch-all', auth.requireAuth, async (req, res) => {
   try {
     const force = req.query.force === 'true' || req.body?.force === true;
+    const asyncMode = req.query.async === 'true' || req.body?.async === true;
+    if (asyncMode) {
+      const result = touchManager.startTouchAll(force);
+      return res.json(result);
+    }
     const results = await touchManager.touchAllFiles(force);
     res.json({ success: true, results, count: results.touchedCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Dedicated Background Touch Manager Endpoints
+app.get('/api/touch/status', auth.requireAuth, (req, res) => {
+  try {
+    res.json({ success: true, ...touchManager.getTouchStatus() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/touch/start', auth.requireAuth, (req, res) => {
+  try {
+    const force = req.query.force === 'true' || req.body?.force === true;
+    const result = touchManager.startTouchAll(force);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/touch/stop', auth.requireAuth, (req, res) => {
+  try {
+    const result = touchManager.stopTouch();
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -632,6 +666,11 @@ app.post('/api/video/:id/share', auth.requireAuth, (req, res) => {
 // Dedicated Gallery Page Route
 app.get('/gallery', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'gallery.html'));
+});
+
+// Dedicated Touch Manager Page Route
+app.get('/touch', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'touch.html'));
 });
 
 // Serve SPA fallback for HTML requests

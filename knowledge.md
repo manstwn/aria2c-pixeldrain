@@ -103,7 +103,7 @@ sequenceDiagram
     Touch->>Touch: Filter LIVE links where last_touched >= 30 days
     loop For Each Qualified File
         Touch->>Touch: Random Delay (1s - 3s)
-        Touch->>Remote: Micro-download 12% chunk (Range: bytes=0-12%)
+        Touch->>Remote: Download 15% chunk with full stream drain (Range: bytes=0-15%)
         alt HTTP 200 / 206 OK
             Touch->>DB: updateFile(id, { last_touched: NOW, status: "LIVE" })
         else HTTP 404 / Error
