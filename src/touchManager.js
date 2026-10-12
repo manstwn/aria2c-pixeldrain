@@ -61,72 +61,96 @@ function getTouchIntervalDays() {
  * Perform 15% chunk download on a single Pixeldrain record to reset 60-day expiry timer.
  * @param {object} file File record object from database
  * @param {object} options Optional settings
+ * @param {boolean} internal True if called from touchAllFiles batch loop
  */
-async function touchFileRecord(file, options = {}) {
+async function touchFileRecord(file, options = {}, internal = false) {
   if (!file || (!file.download_url && !file.pixeldrain_id)) {
     addTouchLog(`Skipping invalid record: ${JSON.stringify(file)}`, 'warn');
     return { success: false, status: 'INVALID', file };
   }
 
-  if (touchState.isAborted) {
-    addTouchLog(`Touch aborted before starting ${file.filename || file.id}`, 'warn');
-    return { success: false, status: 'ABORTED', file };
+  // Mutex: Reject parallel calls when daemon is already busy
+  if (!internal && touchState.isRunning) {
+    addTouchLog(`⚠️ Rejected manual touch for "${file.filename || file.id}": Touch daemon is currently busy.`, 'warn');
+    return { success: false, status: 'BUSY', error: 'Another touch operation is already running. Please wait.' };
+  }
+
+  let singleLockAcquired = false;
+  if (!internal) {
+    touchState.isRunning = true;
+    touchState.isAborted = false;
+    touchState.mode = 'single';
+    touchState.startedAt = new Date().toISOString();
+    touchState.currentIndex = 1;
+    touchState.totalEligible = 1;
+    singleLockAcquired = true;
   }
 
   const filename = file.filename || file.original_filename || 'file';
   const pageUrl = file.download_url || `https://pixeldrain.com/u/${file.pixeldrain_id}`;
   const directFileUrl = `https://pixeldrain.com/api/file/${file.pixeldrain_id}`;
 
-  let fileSize = file.metadata && file.metadata.size_bytes ? file.metadata.size_bytes : 0;
-  if (!fileSize && file.pixeldrain_id) {
-    try {
-      const infoRes = await axios.get(`https://pixeldrain.com/api/file/${file.pixeldrain_id}/info`, { timeout: 10000 });
-      if (infoRes.data && infoRes.data.size) {
-        fileSize = infoRes.data.size;
-      }
-    } catch (e) {
-      if (e.response && e.response.status === 404) {
-        const updated = db.updateFile(file.id, { status: 'DEAD' });
-        addTouchLog(`❌ Touch FAILED (404 Not Found) for "${filename}". Marked DEAD.`, 'error');
-        return { success: false, status: 'DEAD', file: updated };
+  try {
+    if (touchState.isAborted) {
+      addTouchLog(`Touch aborted before starting ${filename}`, 'warn');
+      return { success: false, status: 'ABORTED', file };
+    }
+
+    let fileSize = file.metadata && file.metadata.size_bytes ? file.metadata.size_bytes : 0;
+    if (!fileSize && file.pixeldrain_id) {
+      try {
+        const infoRes = await axios.get(`https://pixeldrain.com/api/file/${file.pixeldrain_id}/info`, { timeout: 10000 });
+        if (infoRes.data && infoRes.data.size) {
+          fileSize = infoRes.data.size;
+        }
+      } catch (e) {
+        if (e.response && e.response.status === 404) {
+          const updated = db.updateFile(file.id, { status: 'DEAD' });
+          addTouchLog(`❌ Touch FAILED (404 Not Found) for "${filename}". Marked DEAD.`, 'error');
+          return { success: false, status: 'DEAD', file: updated };
+        }
       }
     }
-  }
 
-  const targetBytes = fileSize > 0 ? Math.ceil(fileSize * 0.15) : 1024;
-  const rangeHeader = fileSize > 0 ? `bytes=0-${targetBytes - 1}` : 'bytes=0-1024';
-  const targetMB = (targetBytes / (1024 * 1024)).toFixed(1);
-  const totalMB = (fileSize / (1024 * 1024)).toFixed(1);
+    const targetBytes = fileSize > 0 ? Math.ceil(fileSize * 0.15) : 1024;
+    const rangeHeader = fileSize > 0 ? `bytes=0-${targetBytes - 1}` : 'bytes=0-1024';
+    const targetMB = (targetBytes / (1024 * 1024)).toFixed(1);
+    const totalMB = (fileSize / (1024 * 1024)).toFixed(1);
 
-  // Dynamic timeout: ~300 KB/s worst-case rate limit + 60s base
-  const timeoutMs = Math.max(60000, Math.ceil((targetBytes / 300000) * 1000));
+    // Dynamic timeout: ~300 KB/s worst-case rate limit + 60s base
+    const timeoutMs = Math.max(60000, Math.ceil((targetBytes / 300000) * 1000));
 
-  touchState.currentFile = {
-    id: file.id,
-    filename: filename,
-    pixeldrain_id: file.pixeldrain_id,
-    page_url: pageUrl,
-    direct_url: directFileUrl,
-    total_bytes: fileSize,
-    total_formatted: `${totalMB} MB`,
-    target_bytes: targetBytes,
-    target_formatted: `${targetMB} MB`,
-    downloaded_bytes: 0,
-    percent: 0,
-    speed_bytes: 0,
-    speed_formatted: '0 MB/s',
-    eta_seconds: 0
-  };
+    touchState.currentFile = {
+      id: file.id,
+      filename: filename,
+      pixeldrain_id: file.pixeldrain_id,
+      page_url: pageUrl,
+      direct_url: directFileUrl,
+      total_bytes: fileSize,
+      total_formatted: `${totalMB} MB`,
+      target_bytes: targetBytes,
+      target_formatted: `${targetMB} MB`,
+      downloaded_bytes: 0,
+      percent: 0,
+      speed_bytes: 0,
+      speed_formatted: '0 MB/s',
+      eta_seconds: 0
+    };
 
-  addTouchLog(`⚡ Touching "${filename}" (15% chunk = ${targetMB} MB / ${totalMB} MB total)...`, 'info');
+    addTouchLog(`⚡ Touching "${filename}" (15% chunk = ${targetMB} MB / ${totalMB} MB total)...`, 'info');
 
-  try {
+    const headers = {
+      'User-Agent': USER_AGENT,
+      'Accept': '*/*',
+      'Range': rangeHeader
+    };
+    const token = (process.env.PIXELDRAIN_API_TOKEN || '').trim();
+    if (token) {
+      headers['Authorization'] = `Basic ${Buffer.from(`:${token}`).toString('base64')}`;
+    }
+
     const response = await axios.get(directFileUrl, {
-      headers: {
-        'User-Agent': USER_AGENT,
-        'Accept': '*/*',
-        'Range': rangeHeader
-      },
+      headers,
       timeout: timeoutMs,
       responseType: 'stream',
       validateStatus: s => s < 500
@@ -135,13 +159,18 @@ async function touchFileRecord(file, options = {}) {
     if (response.status === 404) {
       const updated = db.updateFile(file.id, { status: 'DEAD' });
       addTouchLog(`❌ 404 Not Found for "${filename}" (ID: ${file.pixeldrain_id}). Marked DEAD.`, 'error');
-      touchState.currentFile = null;
       return { success: false, status: 'DEAD', file: updated };
+    }
+
+    // Rate-limit handling: 403 / 429
+    if ((response.status === 403 || response.status === 429) && !options.retried) {
+      addTouchLog(`⚠️ HTTP ${response.status} rate-limited for "${filename}". Backing off 5s before retry...`, 'warn');
+      await sleep(5000);
+      return touchFileRecord(file, { ...options, retried: true }, internal);
     }
 
     if (response.status !== 200 && response.status !== 206) {
       addTouchLog(`⚠️ HTTP ${response.status} for "${filename}". Status untouched.`, 'warn');
-      touchState.currentFile = null;
       return { success: false, status: file.status, file };
     }
 
@@ -162,7 +191,7 @@ async function touchFileRecord(file, options = {}) {
         const now = Date.now();
         const diffSec = (now - lastTime) / 1000;
 
-        if (diffSec >= 0.5 || downloadedBytes >= targetBytes) {
+        if (diffSec >= 0.25 || downloadedBytes >= targetBytes) {
           const currentSpeed = diffSec > 0 ? (downloadedBytes - lastLoaded) / diffSec : 0;
           lastLoaded = downloadedBytes;
           lastTime = now;
@@ -191,19 +220,24 @@ async function touchFileRecord(file, options = {}) {
 
     activeHttpStream = null;
 
+    // Verify transferred bytes actually exceeded the required 10% threshold
+    const minRequiredBytes = fileSize > 0 ? Math.floor(fileSize * 0.10) : 512;
+    if (downloadedBytes < minRequiredBytes && !touchState.isAborted) {
+      throw new Error(`Incomplete download: stream closed after ${(downloadedBytes / (1024 * 1024)).toFixed(1)} MB (less than 10% threshold of ${(minRequiredBytes / (1024 * 1024)).toFixed(1)} MB)`);
+    }
+
     const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
     const updated = db.updateFile(file.id, {
       last_touched: new Date().toISOString(),
       status: 'LIVE'
     });
 
-    addTouchLog(`✅ Touch successful for "${filename}" (${targetMB} MB in ${durationSec}s). Timer reset +60 days!`, 'success');
-    touchState.currentFile = null;
+    const actualDrainedMB = (downloadedBytes / (1024 * 1024)).toFixed(1);
+    addTouchLog(`✅ Touch successful for "${filename}" (${actualDrainedMB} MB in ${durationSec}s). Timer reset +60 days!`, 'success');
     return { success: true, status: 'LIVE', file: updated };
 
   } catch (err) {
     activeHttpStream = null;
-    touchState.currentFile = null;
 
     if (touchState.isAborted) {
       addTouchLog(`🛑 Touch cancelled for "${filename}".`, 'warn');
@@ -212,6 +246,13 @@ async function touchFileRecord(file, options = {}) {
 
     addTouchLog(`⚠️ Touch error for "${filename}": ${err.message}`, 'error');
     return { success: false, status: file.status, file };
+  } finally {
+    if (singleLockAcquired) {
+      touchState.isRunning = false;
+      touchState.completedAt = new Date().toISOString();
+      touchState.currentFile = null;
+      activeHttpStream = null;
+    }
   }
 }
 
@@ -285,7 +326,7 @@ async function touchAllFiles(force = false) {
       touchState.currentIndex = i + 1;
       const file = eligibleFiles[i];
 
-      const result = await touchFileRecord(file);
+      const result = await touchFileRecord(file, {}, true);
       if (result && result.success) {
         touchState.touchedCount++;
       } else if (result && result.status === 'DEAD') {
@@ -295,7 +336,7 @@ async function touchAllFiles(force = false) {
       }
 
       if (i < eligibleFiles.length - 1 && !touchState.isAborted) {
-        const delay = Math.floor(Math.random() * 2000) + 1000;
+        const delay = Math.floor(Math.random() * 1500) + 3500;
         await sleep(delay);
       }
     }

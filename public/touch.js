@@ -171,9 +171,38 @@ function initSSE() {
   };
 }
 
+let pollInterval = null;
+
+function checkPolling() {
+  if (touchStatus && touchStatus.isRunning) {
+    if (!pollInterval) {
+      pollInterval = setInterval(fetchTouchStatus, 1000);
+    }
+  } else {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  }
+}
+
+async function fetchTouchStatus() {
+  try {
+    const res = await fetch('/api/touch/status');
+    const data = await res.json();
+    if (data.success) {
+      touchStatus = data;
+      renderTouchStatus();
+      renderLedger();
+    }
+  } catch (e) {}
+}
+
 // Render Touch Daemon Header & Active Progress
 function renderTouchStatus() {
   if (!touchStatus) return;
+
+  checkPolling();
 
   const isRunning = Boolean(touchStatus.isRunning);
   const badge = document.getElementById('touchStatusBadge');
@@ -212,8 +241,10 @@ function renderTouchStatus() {
   if (isRunning) {
     badge.className = 'touch-status-badge running';
     badgeText.textContent = '⚡ TOUCHING IN PROGRESS';
-    btnStartDue.style.display = 'none';
-    btnStartForce.style.display = 'none';
+    btnStartDue.disabled = true;
+    btnStartForce.disabled = true;
+    btnStartDue.style.opacity = '0.5';
+    btnStartForce.style.opacity = '0.5';
     btnStop.style.display = 'inline-flex';
     activeBox.style.display = 'block';
 
@@ -246,6 +277,10 @@ function renderTouchStatus() {
   } else {
     badge.className = 'touch-status-badge idle';
     badgeText.textContent = 'DAEMON IDLE / READY';
+    btnStartDue.disabled = false;
+    btnStartForce.disabled = false;
+    btnStartDue.style.opacity = '1';
+    btnStartForce.style.opacity = '1';
     btnStartDue.style.display = 'inline-flex';
     btnStartForce.style.display = 'inline-flex';
     btnStop.style.display = 'none';
@@ -411,7 +446,23 @@ function renderLedger() {
       ? `<span class="status-badge dead">DEAD</span>`
       : `<span class="status-badge live"><span class="dot-pulse"></span> LIVE</span>`;
 
-    const isCurrentlyTouching = touchStatus && touchStatus.currentFile && touchStatus.currentFile.id === file.id;
+    const isRunning = Boolean(touchStatus && touchStatus.isRunning);
+    const isCurrentlyTouching = isRunning && touchStatus.currentFile && touchStatus.currentFile.id === file.id;
+
+    let buttonLabel = '⚡ Touch';
+    let buttonDisabled = false;
+    let buttonTitle = 'Download 15% chunk to reset 60-day expiry timer';
+
+    if (isCurrentlyTouching) {
+      buttonLabel = '⚡ Downloading...';
+      buttonDisabled = true;
+      buttonTitle = 'This file is currently downloading';
+    } else if (isRunning) {
+      buttonDisabled = true;
+      buttonTitle = 'Another touch operation is currently in progress. Please wait.';
+    } else if (isDead) {
+      buttonTitle = 'File returned 404 from Pixeldrain (already expired)';
+    }
 
     return `<tr>
       <td>
@@ -438,9 +489,9 @@ function renderLedger() {
       <td style="text-align: right;">
         <button type="button" class="btn-table-action" style="padding: 4px 10px; font-size: 0.75rem;" 
           onclick="touchSingleFile('${file.id}')"
-          ${isCurrentlyTouching ? 'disabled' : ''}
-          title="Download 15% chunk to reset 60-day expiry timer">
-          ${isCurrentlyTouching ? '⚡ Touching...' : '⚡ Touch'}
+          ${buttonDisabled ? 'disabled' : ''}
+          title="${escapeHtml(buttonTitle)}">
+          ${buttonLabel}
         </button>
       </td>
     </tr>`;
@@ -449,6 +500,10 @@ function renderLedger() {
 
 // User Actions
 async function startTouchDue() {
+  if (touchStatus && touchStatus.isRunning) {
+    showToast('Touch daemon is already running. Please wait.', 'warn');
+    return;
+  }
   const btn = document.getElementById('btnStartTouchDue');
   if (btn) btn.disabled = true;
   try {
@@ -456,6 +511,7 @@ async function startTouchDue() {
     const data = await res.json();
     if (data.success) {
       showToast('🚀 Background touch batch started for due files!', 'success');
+      fetchTouchStatus();
     } else {
       showToast(data.message || 'Touch batch already running', 'warn');
     }
@@ -467,6 +523,10 @@ async function startTouchDue() {
 }
 
 async function startTouchForce() {
+  if (touchStatus && touchStatus.isRunning) {
+    showToast('Touch daemon is already running. Please wait.', 'warn');
+    return;
+  }
   if (!confirm('Force Touch will touch ALL live files regardless of how recently they were touched. Continue?')) {
     return;
   }
@@ -477,6 +537,7 @@ async function startTouchForce() {
     const data = await res.json();
     if (data.success) {
       showToast('⚡ Force touch started for ALL files in background!', 'success');
+      fetchTouchStatus();
     } else {
       showToast(data.message || 'Touch batch already running', 'warn');
     }
@@ -495,6 +556,7 @@ async function stopTouch() {
     const data = await res.json();
     if (data.success) {
       showToast('🛑 Touch process cancellation requested.', 'warn');
+      setTimeout(fetchTouchStatus, 500);
     } else {
       showToast(data.message || 'Failed to stop touch', 'error');
     }
@@ -506,15 +568,27 @@ async function stopTouch() {
 }
 
 async function touchSingleFile(id) {
+  if (touchStatus && touchStatus.isRunning) {
+    showToast('Touch daemon is currently busy with another file. Please wait.', 'warn');
+    return;
+  }
   showToast('⚡ Starting 15% download for file...', 'info');
+  // Trigger immediate status check to lock UI
+  setTimeout(fetchTouchStatus, 300);
+
   try {
     const res = await fetch(`/api/files/${id}/touch`, { method: 'POST' });
     const data = await res.json();
+    if (res.status === 409) {
+      showToast(data.error || 'Daemon is currently busy', 'warn');
+      return;
+    }
     if (data.success) {
       showToast('✅ File successfully touched! Expiry reset +60 days.', 'success');
     } else {
-      showToast(`Touch failed: ${data.result?.status || 'Unknown error'}`, 'error');
+      showToast(`Touch failed: ${data.result?.status || data.error || 'Check logs'}`, 'error');
     }
+    fetchTouchStatus();
   } catch (err) {
     showToast('Error touching file', 'error');
   }
