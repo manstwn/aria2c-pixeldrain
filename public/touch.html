@@ -339,7 +339,7 @@
     </header>
 
     <!-- MAIN BODY -->
-    <main class="dashboard-content">
+    <main class="main-content-canvas">
 
       <!-- HERO / LIVE BACKGROUND TOUCH CARD -->
       <section class="glass-panel touch-hero-card" id="touchHeroCard">
@@ -442,26 +442,29 @@
       </div>
 
       <!-- RETENTION LEDGER SECTION -->
-      <section class="glass-panel" style="padding: 24px; margin-bottom: 24px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 18px;">
-          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-            <h3 style="font-size: 1.1rem; font-weight: 700; margin: 0; color: var(--text-primary);">
+      <section class="glass-panel" style="padding: 24px; border-radius: var(--radius-xl); margin-bottom: 24px;">
+        <div class="flex-between" style="margin-bottom: 16px;">
+          <div>
+            <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 8px; margin: 0;">
+              <span class="material-symbols-outlined" style="color: var(--color-electric-blue);">inventory_2</span>
               File Retention Ledger
             </h3>
-            <!-- Filter Tabs -->
-            <div class="tag-filter-bar" style="margin: 0;">
-              <button type="button" class="tag-filter-pill active" data-filter="all" onclick="setFilter('all')">All (<span id="filterAllCount">0</span>)</button>
-              <button type="button" class="tag-filter-pill" data-filter="due" onclick="setFilter('due')">⚡ Due (<span id="filterDueCount">0</span>)</button>
-              <button type="button" class="tag-filter-pill" data-filter="urgent" onclick="setFilter('urgent')">⚠️ Urgent (<span id="filterUrgentCount">0</span>)</button>
-              <button type="button" class="tag-filter-pill" data-filter="live" onclick="setFilter('live')">✅ Live (<span id="filterLiveCount">0</span>)</button>
-              <button type="button" class="tag-filter-pill" data-filter="dead" onclick="setFilter('dead')">❌ Dead (<span id="filterDeadCount">0</span>)</button>
-            </div>
+            <p class="section-desc" style="margin-top: 4px;">Live tracking of cloud retention, file age, and 60-day Pixeldrain expiration</p>
+          </div>
+        </div>
+
+        <div class="filter-bar" style="margin-bottom: 18px;">
+          <div class="search-box">
+            <span class="material-symbols-outlined search-icon" style="color: var(--text-muted); font-size: 18px;">search</span>
+            <input type="text" id="touchSearchInput" class="glow-input" placeholder="Search filename or ID..." oninput="handleSearch()">
           </div>
 
-          <!-- Search Input -->
-          <div class="search-input-wrapper" style="max-width: 280px; width: 100%;">
-            <span class="material-symbols-outlined search-icon">search</span>
-            <input type="text" id="touchSearchInput" class="search-input" placeholder="Search filename or ID..." oninput="handleSearch()">
+          <div class="status-filter-pills">
+            <button type="button" class="filter-pill active" data-filter="all" onclick="setFilter('all', this)">All (<span id="filterAllCount">0</span>)</button>
+            <button type="button" class="filter-pill" data-filter="due" onclick="setFilter('due', this)">⚡ Due (<span id="filterDueCount">0</span>)</button>
+            <button type="button" class="filter-pill" data-filter="urgent" onclick="setFilter('urgent', this)">⚠️ Urgent (<span id="filterUrgentCount">0</span>)</button>
+            <button type="button" class="filter-pill" data-filter="live" onclick="setFilter('live', this)">✅ Live (<span id="filterLiveCount">0</span>)</button>
+            <button type="button" class="filter-pill" data-filter="dead" onclick="setFilter('dead', this)">❌ Dead (<span id="filterDeadCount">0</span>)</button>
           </div>
         </div>
 
@@ -470,17 +473,18 @@
           <table class="ledger-table" id="touchTable">
             <thead>
               <tr>
-                <th style="width: 38%;">File / Title</th>
-                <th style="width: 12%;">Size</th>
-                <th style="width: 16%;">Last Touched</th>
-                <th style="width: 14%;">60d Expiry</th>
-                <th style="width: 10%;">Status</th>
+                <th style="width: 32%;">File / Title</th>
+                <th style="width: 10%;">Size</th>
+                <th style="width: 13%;">File Age</th>
+                <th style="width: 15%;">Last Touched</th>
+                <th style="width: 12%;">60d Expiry</th>
+                <th style="width: 8%;">Status</th>
                 <th style="width: 10%; text-align: right;">Action</th>
               </tr>
             </thead>
             <tbody id="touchTableBody">
               <tr>
-                <td colspan="6" style="text-align: center; padding: 32px; color: var(--text-muted);">
+                <td colspan="7" style="text-align: center; padding: 32px; color: var(--text-muted);">
                   Loading file records...
                 </td>
               </tr>

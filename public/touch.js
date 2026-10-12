@@ -323,10 +323,10 @@ function clearLogs() {
 }
 
 // Filter Tabs & Search
-function setFilter(filter) {
+function setFilter(filter, el) {
   currentFilter = filter;
   currentPage = 1;
-  document.querySelectorAll('.tag-filter-pill').forEach(btn => {
+  document.querySelectorAll('.filter-pill').forEach(btn => {
     if (btn.getAttribute('data-filter') === filter) {
       btn.classList.add('active');
     } else {
@@ -417,7 +417,7 @@ function renderLedger() {
   document.getElementById('btnNextPage').disabled = (currentPage >= maxPage);
 
   if (pageItems.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 32px; color: var(--text-muted);">No matching file records found.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 32px; color: var(--text-muted);">No matching file records found.</td></tr>`;
     return;
   }
 
@@ -425,6 +425,13 @@ function renderLedger() {
     const name = file.custom_name || file.filename || file.original_filename || 'Unknown file';
     const sizeBytes = file.metadata && file.metadata.size_bytes ? file.metadata.size_bytes : 0;
     const sizeFormatted = sizeBytes > 0 ? formatBytes(sizeBytes) : (file.metadata?.size_formatted || 'N/A');
+
+    // File Original Age (since uploaded/created)
+    const createdStr = file.created_at || file.last_touched;
+    const createdRel = formatRelativeTime(createdStr);
+    const fileAgeDays = createdStr ? Math.floor((now - new Date(createdStr).getTime()) / 86400000) : 0;
+
+    // Last Touched Age
     const lastTouchedStr = file.last_touched || file.created_at;
     const lastTouchedRel = formatRelativeTime(lastTouchedStr);
     const ageDays = Math.floor((now - (lastTouchedStr ? new Date(lastTouchedStr).getTime() : 0)) / 86400000);
@@ -478,6 +485,12 @@ function renderLedger() {
         </div>
       </td>
       <td class="mono" style="font-size: 0.85rem; color: #cbd5e1;">${sizeFormatted}</td>
+      <td>
+        <div style="display: flex; flex-direction: column;">
+          <span style="font-size: 0.85rem; color: #e2e8f0;">${createdRel}</span>
+          <span class="mono" style="font-size: 0.72rem; color: #64748b;">${fileAgeDays} day(s) old</span>
+        </div>
+      </td>
       <td>
         <div style="display: flex; flex-direction: column;">
           <span style="font-size: 0.85rem; color: #e2e8f0;">${lastTouchedRel}</span>
