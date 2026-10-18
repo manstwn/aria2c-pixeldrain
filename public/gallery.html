@@ -153,7 +153,11 @@
             <input type="text" id="gallerySearchInput" oninput="handleGallerySearchInput()" placeholder="Search media by title or ID..." class="glow-input">
           </div>
 
-          <div class="gallery-toolbar-controls" style="display: flex; gap: 12px; margin-left: auto; flex-wrap: wrap; align-items: center;">
+          <button type="button" class="btn-table-action gallery-filters-toggle" onclick="toggleGalleryFilters()" aria-expanded="false" aria-controls="galleryFiltersPanel">
+            <span class="material-symbols-outlined" style="font-size: 16px;">tune</span> Filters
+          </button>
+
+          <div id="galleryFiltersPanel" class="gallery-toolbar-controls" style="display: flex; gap: 12px; margin-left: auto; flex-wrap: wrap; align-items: center;">
             <div class="page-size-selector grid-selector-mobile-hide">
               <label for="galleryGridColsSelect">Grid:</label>
               <select id="galleryGridColsSelect" onchange="changeGridColumns(this.value)" class="glow-input">

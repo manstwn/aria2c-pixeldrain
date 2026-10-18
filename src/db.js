@@ -259,6 +259,33 @@ function getAllFiles() {
   return _filesCache.map(file => enrichFile({ ...file }));
 }
 
+/**
+ * Lightweight gallery projection: keeps metadata + cover thumbnail, omits full
+ * thumbnails arrays to reduce initial payload. Full thumbnails are fetched on
+ * demand via getFileById() (e.g. when opening the lightbox).
+ */
+function getGalleryFiles() {
+  if (mongoClient.isMongoConnected() && (Date.now() - _lastMongoRefreshTime > 3000)) {
+    refreshFromMongo().catch(() => {});
+  }
+  return _filesCache.map(file => {
+    const enriched = enrichFile({ ...file });
+    const thumbs = Array.isArray(file.thumbnails) ? file.thumbnails : [];
+    const cover = file.selected_thumbnail || (thumbs.length > 0 ? thumbs[0] : null);
+    const { thumbnails, ...rest } = enriched;
+    return {
+      ...rest,
+      cover_thumbnail: cover,
+      thumbnail_count: thumbs.length
+    };
+  });
+}
+
+async function getGalleryFilesAsync(force = false) {
+  await refreshFromMongo(force);
+  return getGalleryFiles();
+}
+
 async function getAllFilesAsync(force = false) {
   await refreshFromMongo(force);
   return getAllFiles();
@@ -650,6 +677,8 @@ module.exports = {
   generateId,
   getAllFiles,
   getAllFilesAsync,
+  getGalleryFiles,
+  getGalleryFilesAsync,
   getFileById,
   addFile,
   updateFile,

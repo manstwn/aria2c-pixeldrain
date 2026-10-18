@@ -2729,3 +2729,40 @@ input:focus {
     display: none !important;
   }
 }
+
+/* Gallery mobile filter toggle (hidden on desktop) */
+.gallery-filters-toggle {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .gallery-filters-toggle {
+    display: inline-flex;
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+  .gallery-toolbar-controls {
+    display: none !important;
+  }
+  .gallery-toolbar-controls.expanded {
+    display: grid !important;
+  }
+  .gallery-item-card:hover {
+    transform: none;
+  }
+}
+
+@media (hover: none) {
+  .gallery-item-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}

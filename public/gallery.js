@@ -158,7 +158,7 @@ async function fetchFiles() {
   if (isFetchingFiles) return;
   isFetchingFiles = true;
   try {
-    const res = await fetch('/api/files');
+    const res = await fetch('/api/files?view=gallery');
     if (res.status === 401) {
       showLogin();
       return;
@@ -296,6 +296,14 @@ function handleGallerySearchInput() {
   _gallerySearchDebounce = setTimeout(renderGalleryPage, 200);
 }
 
+function toggleGalleryFilters() {
+  const panel = document.getElementById('galleryFiltersPanel');
+  const btn = document.getElementById('galleryFiltersToggle');
+  if (!panel) return;
+  const expanded = panel.classList.toggle('expanded');
+  if (btn) btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+}
+
 function renderGalleryPage() {
   const container = document.getElementById('galleryGridContainer');
   const emptyState = document.getElementById('galleryEmptyState');
@@ -398,8 +406,9 @@ function renderGalleryPage() {
     const cat = meta.category || 'file';
     const catIcon = cat === 'video' ? '🎬' : cat === 'image' ? '🖼️' : cat === 'audio' ? '🎵' : cat === 'archive' ? '📦' : '📄';
     const displayName = file.custom_name || file.original_filename || file.filename;
-    const thumbs = file.thumbnails || [];
-    const thumbUrl = file.selected_thumbnail || (thumbs.length > 0 ? thumbs[0] : null);
+    const thumbs = [];
+    const thumbUrl = file.cover_thumbnail || file.selected_thumbnail || null;
+    const thumbCount = file.thumbnail_count || 0;
 
     const playableClass = file.playable === true
       ? 'playable-ok'
@@ -424,9 +433,9 @@ function renderGalleryPage() {
     topBadgeHTML += '</div>';
 
     // Bottom Frame Lighting Dots
-    const frameDotsHTML = (thumbs.length > 1)
+    const frameDotsHTML = (thumbCount > 1)
       ? `<div class="cover-frame-dots" id="dots_${file.id}">
-           ${thumbs.map((_, idx) => `<span class="frame-dot ${idx === 0 ? 'active' : ''}"></span>`).join('')}
+           ${Array.from({ length: thumbCount }, (_, idx) => `<span class="frame-dot ${idx === 0 ? 'active' : ''}"></span>`).join('')}
          </div>`
       : '';
 
@@ -524,11 +533,34 @@ function setActiveFrameDot(fileId, frameIdx) {
   });
 }
 
-function startHoverSlideshow(evt, fileId) {
+async function startHoverSlideshow(evt, fileId) {
   stopHoverSlideshow(evt, fileId);
 
-  const file = ledgerFiles.find(f => f.id === fileId);
-  if (!file || !file.thumbnails || file.thumbnails.length <= 1) return;
+  if (window.matchMedia('(max-width: 768px)').matches) return;
+
+  let file = ledgerFiles.find(f => f.id === fileId);
+  if (!file) return;
+
+  // Lazy-load full thumbnail list on first hover (desktop only)
+  if (!Array.isArray(file.thumbnails) || file.thumbnails.length <= 1) {
+    try {
+      const res = await fetch(`/api/files/${fileId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.file) {
+          const idx = ledgerFiles.findIndex(f => f.id === fileId);
+          if (idx !== -1) {
+            ledgerFiles[idx] = { ...ledgerFiles[idx], ...data.file, cover_thumbnail: ledgerFiles[idx].cover_thumbnail };
+          }
+          file = ledgerFiles[idx] || file;
+        }
+      }
+    } catch (e) {}
+  }
+
+  const cardEl = document.getElementById(`card_${fileId}`);
+  if (!cardEl || !cardEl.matches(':hover')) return;
+  if (!file || !Array.isArray(file.thumbnails) || file.thumbnails.length <= 1) return;
 
   // Hover intent delay (180ms) so fast cursor passing doesn't trigger frame downloads
   hoverStartTimers[fileId] = setTimeout(() => {
@@ -621,6 +653,7 @@ function stopHoverSlideshow(evt, fileId) {
 // Mobile: a touch/drag landing on a card starts its frame cycling.
 // Any previously active card is stopped first so at most one slideshow timer runs at a time.
 function handleCardTouch(evt, fileId) {
+  if (window.matchMedia('(max-width: 768px)').matches) return;
   if (activeHoverFileId && activeHoverFileId !== fileId) {
     stopHoverSlideshow(null, activeHoverFileId);
   }
@@ -647,8 +680,24 @@ let activeGalleryImages = [];
 let currentGalleryIndex = 0;
 let lightboxReturnFocus = null;
 
-function openGalleryModal(fileId) {
-  const file = ledgerFiles.find(f => f.id === fileId);
+async function openGalleryModal(fileId) {
+  let file = ledgerFiles.find(f => f.id === fileId);
+  if (!file) return;
+
+  if (!Array.isArray(file.thumbnails) || file.thumbnails.length === 0) {
+    try {
+      const res = await fetch(`/api/files/${fileId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.file) {
+          const idx = ledgerFiles.findIndex(f => f.id === fileId);
+          if (idx !== -1) ledgerFiles[idx] = { ...ledgerFiles[idx], ...data.file, cover_thumbnail: ledgerFiles[idx].cover_thumbnail };
+          file = ledgerFiles[idx];
+        }
+      }
+    } catch (e) {}
+  }
+
   if (!file || !file.thumbnails || file.thumbnails.length === 0) {
     showToast('No screenshot frames available for this file.', 'info');
     return;
@@ -730,6 +779,7 @@ async function setAsCoverThumbnail() {
     const data = await res.json();
     if (res.ok && data.success) {
       file.selected_thumbnail = currentUrl;
+      file.cover_thumbnail = currentUrl;
       showToast('⭐ Primary cover thumbnail updated!', 'success');
       renderGalleryState();
       renderGalleryPage();

@@ -303,8 +303,23 @@ app.delete('/api/download-log', auth.requireAuth, (req, res) => {
 // File Ledger Routes
 app.get('/api/files', auth.requireAuth, async (req, res) => {
   try {
+    if (req.query.view === 'gallery') {
+      const files = await db.getGalleryFilesAsync(true);
+      return res.json({ files });
+    }
     const files = await db.getAllFilesAsync(true);
     res.json({ files });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Single file record (includes full thumbnails array) for on-demand loading
+app.get('/api/files/:id', auth.requireAuth, (req, res) => {
+  try {
+    const file = db.getFileById(req.params.id);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+    res.json({ file });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
